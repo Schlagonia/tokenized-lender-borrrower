@@ -8,7 +8,6 @@ import {IStrategyInterface} from "./interfaces/IStrategyInterface.sol";
 
 contract TokenizedCompV3LenderBorrowerFactory {
 
-    address public immutable originalDepositer;
     address public immutable managment;
     address public immutable rewards;
     address public immutable keeper;
@@ -23,8 +22,6 @@ contract TokenizedCompV3LenderBorrowerFactory {
         managment = _managment;
         rewards = _rewards;
         keeper = _keeper;
-
-        originalDepositer = address(new Depositer());
     }
 
     function name() external pure returns (string memory) {

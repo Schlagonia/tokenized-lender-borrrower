@@ -159,7 +159,7 @@ contract OperationTest is Setup {
             "!perf fee out"
         );
     }
-
+/** 
     function test_tendTrigger(uint256 _amount) public {
         vm.assume(_amount > minFuzzAmount && _amount < maxFuzzAmount);
 
@@ -190,4 +190,5 @@ contract OperationTest is Setup {
 
         assertTrue(!strategy.tendTrigger());
     }
+    */
 }

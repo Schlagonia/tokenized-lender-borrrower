@@ -27,15 +27,15 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
     bool public leaveDebtBehind;
 
     // This is the address of the main V3 pool
-    Comet public comet;
+    Comet public immutable comet;
     // This is the token we will be borrowing/supplying
-    address public baseToken;
+    address public immutable baseToken;
     // The contract to get Comp rewards from
     CometRewards public constant rewardsContract =
         CometRewards(0x1B0e765F6224C21223AeA2af16c1C46E38885a40);
 
     // The Contract that will deposit the baseToken back into Compound
-    Depositer public depositer;
+    Depositer public immutable depositer;
 
     // The reward Token
     address internal constant comp = 0xc00e94Cb662C3520282E6f5717214004A7f26888;
@@ -64,7 +64,41 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
         uint24 _ethToAssetFee,
         address _depositer
     ) BaseTokenizedStrategy(_asset, _name) {
-        initializeCompV3LenderBorrower(_comet, _ethToAssetFee, _depositer);
+        comet = Comet(_comet);
+
+        //Get the baseToken we wil borrow and the min
+        baseToken = comet.baseToken();
+        minThreshold = comet.baseBorrowMin();
+
+        depositer = Depositer(_depositer);
+        require(baseToken == address(depositer.baseToken()), "!base");
+
+        // to supply asset as collateral
+        ERC20(asset).safeApprove(_comet, type(uint256).max);
+        // to repay debt
+        ERC20(baseToken).safeApprove(_comet, type(uint256).max);
+        // for depositer to pull funds to deposit
+        ERC20(baseToken).safeApprove(_depositer, type(uint256).max);
+        // to sell reward tokens
+        ERC20(comp).safeApprove(address(router), type(uint256).max);
+
+        // Set the needed variables for the Uni Swapper
+        // Base will be weth.
+        base = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+        // UniV3 mainnet router.
+        router = 0xE592427A0AEce92De3Edee1F18E0157C05861564;
+        // Set the min amount for the swapper to sell
+        minAmountToSell = 1e12;
+
+        //Default to .3% pool for comp/eth and to .05% pool for eth/baseToken
+        _setFees(3000, 500, _ethToAssetFee);
+
+        // set default price feeds
+        priceFeeds[baseToken] = comet.baseTokenPriceFeed();
+        // default to COMP/USD
+        priceFeeds[comp] = 0xdbd020CAeF83eFd542f4De03e3cF0C28A4428bd5;
+        // default to given feed for asset
+        priceFeeds[asset] = comet.getAssetInfoByAddress(asset).priceFeed;
     }
 
     // ----------------- SETTERS -----------------
@@ -113,50 +147,6 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
         _setUniFees(comp, _weth, _compToEthFee);
         _setUniFees(baseToken, _weth, _ethToBaseFee);
         _setUniFees(asset, _weth, _ethToAssetFee);
-    }
-
-    function initializeCompV3LenderBorrower(
-        address _comet,
-        uint24 _ethToAssetFee,
-        address _depositer
-    ) public {
-        // Make sure we only initialize one time
-        require(address(comet) == address(0));
-        comet = Comet(_comet);
-
-        //Get the baseToken we wil borrow and the min
-        baseToken = comet.baseToken();
-        minThreshold = comet.baseBorrowMin();
-
-        depositer = Depositer(_depositer);
-        require(baseToken == address(depositer.baseToken()), "!base");
-
-        // to supply asset as collateral
-        ERC20(asset).safeApprove(_comet, type(uint256).max);
-        // to repay debt
-        ERC20(baseToken).safeApprove(_comet, type(uint256).max);
-        // for depositer to pull funds to deposit
-        ERC20(baseToken).safeApprove(_depositer, type(uint256).max);
-        // to sell reward tokens
-        //ERC20(comp).safeApprove(address(router), type(uint256).max);
-
-        // Set the needed variables for the Uni Swapper
-        // Base will be weth.
-        base = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
-        // UniV3 mainnet router.
-        router = 0xE592427A0AEce92De3Edee1F18E0157C05861564;
-        // Set the min amount for the swapper to sell
-        minAmountToSell = 1e12;
-
-        //Default to .3% pool for comp/eth and to .05% pool for eth/baseToken
-        _setFees(3000, 500, _ethToAssetFee);
-
-        // set default price feeds
-        priceFeeds[baseToken] = comet.baseTokenPriceFeed();
-        // default to COMP/USD
-        priceFeeds[comp] = 0xdbd020CAeF83eFd542f4De03e3cF0C28A4428bd5;
-        // default to given feed for asset
-        priceFeeds[asset] = comet.getAssetInfoByAddress(asset).priceFeed;
     }
 
 
@@ -368,20 +358,16 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
     // ----------------- INTERNAL FUNCTIONS SUPPORT ----------------- \\
 
     function _leveragePosition(uint256 _amount) internal {
-        // Cache variables
-        address _asset = asset;
-        address _baseToken = baseToken;
-
         // Could be 0 n tends.
         if (_amount > 0) {
-            _supply(_asset, _amount);
+            _supply(asset, _amount);
         }
 
         // NOTE: debt + collateral calcs are done in USD
-        uint256 collateralInUsd = _toUsd(balanceOfCollateral(), _asset);
+        uint256 collateralInUsd = _toUsd(balanceOfCollateral(), asset);
 
         // convert debt to USD
-        uint256 debtInUsd = _toUsd(balanceOfDebt(), _baseToken);
+        uint256 debtInUsd = _toUsd(balanceOfDebt(), baseToken);
 
         // LTV numbers are always in 1e18
         uint256 currentLTV = (debtInUsd * 1e18) / collateralInUsd;
@@ -401,7 +387,7 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
 
             uint256 amountToBorrowUsd = targetDebtUsd - debtInUsd; // safe bc we checked ratios
             // convert to BaseToken
-            uint256 amountToBorrowBT = _fromUsd(amountToBorrowUsd, _baseToken);
+            uint256 amountToBorrowBT = _fromUsd(amountToBorrowUsd, baseToken);
 
             // We want to make sure that the reward apr > borrow apr so we dont reprot a loss
             // Borrowing will cause the borrow apr to go up and the rewards apr to go down
@@ -424,7 +410,7 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
 
             // Withdraw the difference from the Depositer
             _withdrawFromDepositer(
-                _fromUsd(debtInUsd - targetDebtUsd, _baseToken)
+                _fromUsd(debtInUsd - targetDebtUsd,     baseToken)
             ); // we withdraw from BaseToken depositer
             _repayTokenDebt(); // we repay the BaseToken debt with compound
         }
@@ -711,29 +697,26 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
     function _claimAndSellRewards() internal {
         _claimRewards();
 
-        address _comp = comp;
-
-        uint256 compBalance = ERC20(_comp).balanceOf(address(this));
+        uint256 compBalance = ERC20(comp).balanceOf(address(this));
 
         uint256 baseNeeded = baseTokenOwedBalance();
 
         if (baseNeeded > 0) {
-            address _baseToken = baseToken;
             // We estimate how much we will need in order to get the amount of base
             // Accounts for slippage and diff from oracle price, just to assure no horrible sandwhich
-            uint256 maxComp = (_fromUsd(_toUsd(baseNeeded, _baseToken), _comp) *
+            uint256 maxComp = (_fromUsd(_toUsd(baseNeeded, baseToken), comp) *
                 10_500) / MAX_BPS;
             if (maxComp < compBalance) {
                 // If we have enough swap and exact amount out
-                _swapTo(_comp, _baseToken, baseNeeded, maxComp);
+                _swapTo(comp, baseToken, baseNeeded, maxComp);
             } else {
                 // if not swap everything we have
-                _swapFrom(_comp, _baseToken, compBalance, 0);
+                _swapFrom(comp, baseToken, compBalance, 0);
             }
         }
 
-        compBalance = ERC20(_comp).balanceOf(address(this));
-        _swapFrom(_comp, asset, compBalance, 0);
+        compBalance = ERC20(comp).balanceOf(address(this));
+        _swapFrom(comp, asset, compBalance, 0);
     }
 
     // This should only ever get called when withdrawing all funds from the strategy if there is debt left over.
