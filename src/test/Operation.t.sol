@@ -2,7 +2,7 @@
 pragma solidity ^0.8.18;
 
 import "forge-std/console.sol";
-import {Setup} from "./utils/Setup.sol";
+import {Setup, IStrategyInterface} from "./utils/Setup.sol";
 
 contract OperationTest is Setup {
     function setUp() public override {
@@ -25,8 +25,7 @@ contract OperationTest is Setup {
         // Deposit into strategy
         mintAndDepositIntoStrategy(strategy, user, _amount);
 
-        // TODO: Implement logic so totalDebt is _amount and totalIdle = 0.
-        checkStrategyTotals(strategy, _amount, 0, _amount);
+        checkStrategyTotals(strategy, _amount, _amount, 0);
 
         // Earn Interest
         skip(1 days);
@@ -64,8 +63,7 @@ contract OperationTest is Setup {
         // Deposit into strategy
         mintAndDepositIntoStrategy(strategy, user, _amount);
 
-        // TODO: Implement logic so totalDebt is _amount and totalIdle = 0.
-        checkStrategyTotals(strategy, _amount, 0, _amount);
+        checkStrategyTotals(strategy, _amount, _amount, 0);
 
         // Earn Interest
         skip(1 days);
@@ -110,8 +108,7 @@ contract OperationTest is Setup {
         // Deposit into strategy
         mintAndDepositIntoStrategy(strategy, user, _amount);
 
-        // TODO: Implement logic so totalDebt is _amount and totalIdle = 0.
-        checkStrategyTotals(strategy, _amount, 0, _amount);
+        checkStrategyTotals(strategy, _amount, _amount, 0);
 
         // Earn Interest
         skip(1 days);

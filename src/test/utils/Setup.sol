@@ -12,6 +12,10 @@ import {IStrategyInterface} from "../../interfaces/IStrategyInterface.sol";
 // Inherit the events so they can be checked if desired.
 import {IEvents} from "@tokenized-strategy/interfaces/IEvents.sol";
 
+import {TokenizedCompV3LenderBorrowerFactory} from "../../TokenizedCompV3LenderBorrowerFactory.sol";
+import {Depositer} from "../../Depositer.sol";
+import {Strategy} from "../../Strategy.sol";
+
 interface IFactory {
     function governance() external view returns (address);
 
@@ -24,8 +28,14 @@ contract Setup is ExtendedTest, IEvents {
     // Contract instancees that we will use repeatedly.
     ERC20 public asset;
     IStrategyInterface public strategy;
+    TokenizedCompV3LenderBorrowerFactory public strategyFactory;
+    Depositer public depositer;
 
     mapping(string => address) public tokenAddrs;
+    mapping(string => address) public comets;
+
+    address public comet;
+    uint24 public ethToAssetFee;
 
     // Addresses for different roles we will use repeatedly.
     address public user = address(10);
@@ -41,8 +51,8 @@ contract Setup is ExtendedTest, IEvents {
     uint256 public MAX_BPS = 10_000;
 
     // Fuzz from $0.01 of 1e6 stable coins up to 1 trillion of a 1e18 coin
-    uint256 public maxFuzzAmount = 1e30;
-    uint256 public minFuzzAmount = 10_000;
+    uint256 public maxFuzzAmount = 1e10;
+    uint256 public minFuzzAmount = 100_000;
 
     // Default prfot max unlock time is set for 10 days
     uint256 public profitMaxUnlockTime = 10 days;
@@ -51,7 +61,9 @@ contract Setup is ExtendedTest, IEvents {
         _setTokenAddrs();
 
         // Set asset
-        asset = ERC20(tokenAddrs["DAI"]);
+        asset = ERC20(tokenAddrs["WBTC"]);
+        comet = comets["USDC"];
+        ethToAssetFee = 3_000;
 
         // Set decimals
         decimals = asset.decimals();
@@ -67,21 +79,17 @@ contract Setup is ExtendedTest, IEvents {
         vm.label(address(asset), "asset");
         vm.label(management, "management");
         vm.label(address(strategy), "strategy");
+        vm.label(address(depositer), "Depositer");
+        vm.label(address(strategyFactory), "Strategy Factory");
         vm.label(performanceFeeRecipient, "performanceFeeRecipient");
     }
 
     function setUpStrategy() public returns (address) {
-        // we save the strategy as a IStrategyInterface to give it the needed interface
-        IStrategyInterface _strategy = IStrategyInterface(
-            address(new Strategy(address(asset), "Tokenized Strategy"))
-        );
+        strategyFactory = new TokenizedCompV3LenderBorrowerFactory(management, performanceFeeRecipient, keeper);
 
-        // set keeper
-        _strategy.setKeeper(keeper);
-        // set treasury
-        _strategy.setPerformanceFeeRecipient(performanceFeeRecipient);
-        // set management of the strategy
-        _strategy.setPendingManagement(management);
+        (address _depoister, address strategy_) = strategyFactory.newCompV3LenderBorrower(address(asset), "Test Lender Borrower", comet, ethToAssetFee);
+        // we save the strategy as a IStrategyInterface to give it the needed interface
+        IStrategyInterface _strategy = IStrategyInterface(strategy_);
 
         vm.prank(management);
         _strategy.acceptManagement();
@@ -150,5 +158,7 @@ contract Setup is ExtendedTest, IEvents {
         tokenAddrs["USDT"] = 0xdAC17F958D2ee523a2206206994597C13D831ec7;
         tokenAddrs["DAI"] = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
         tokenAddrs["USDC"] = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
+        comets["WETH"] = 0xA17581A9E3356d9A858b789D68B4d866e593aE94;
+        comets["USDC"] = 0xc3d688B66703497DAA19211EEdff47f25384cdc3;
     }
 }
