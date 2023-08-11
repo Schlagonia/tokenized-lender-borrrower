@@ -53,10 +53,9 @@ contract OperationTest is Setup {
         );
     }
 
-    function test_profitableReport(
-        uint256 _amount,
-        uint16 _profitFactor
-    ) public {
+    function test_profitableReport(uint256 _amount, uint16 _profitFactor)
+        public
+    {
         vm.assume(_amount > minFuzzAmount && _amount < maxFuzzAmount);
         _profitFactor = uint16(bound(uint256(_profitFactor), 10, MAX_BPS));
 
@@ -159,7 +158,7 @@ contract OperationTest is Setup {
             "!perf fee out"
         );
     }
-/** 
+    /** 
     function test_tendTrigger(uint256 _amount) public {
         vm.assume(_amount > minFuzzAmount && _amount < maxFuzzAmount);
 

@@ -85,9 +85,19 @@ contract Setup is ExtendedTest, IEvents {
     }
 
     function setUpStrategy() public returns (address) {
-        strategyFactory = new TokenizedCompV3LenderBorrowerFactory(management, performanceFeeRecipient, keeper);
+        strategyFactory = new TokenizedCompV3LenderBorrowerFactory(
+            management,
+            performanceFeeRecipient,
+            keeper
+        );
 
-        (address _depoister, address strategy_) = strategyFactory.newCompV3LenderBorrower(address(asset), "Test Lender Borrower", comet, ethToAssetFee);
+        (address _depoister, address strategy_) = strategyFactory
+            .newCompV3LenderBorrower(
+                address(asset),
+                "Test Lender Borrower",
+                comet,
+                ethToAssetFee
+            );
         // we save the strategy as a IStrategyInterface to give it the needed interface
         IStrategyInterface _strategy = IStrategyInterface(strategy_);
 
@@ -131,7 +141,11 @@ contract Setup is ExtendedTest, IEvents {
         assertEq(_totalAssets, _totalDebt + _totalIdle, "!Added");
     }
 
-    function airdrop(ERC20 _asset, address _to, uint256 _amount) public {
+    function airdrop(
+        ERC20 _asset,
+        address _to,
+        uint256 _amount
+    ) public {
         uint256 balanceBefore = _asset.balanceOf(_to);
         deal(address(_asset), _to, balanceBefore + _amount);
     }

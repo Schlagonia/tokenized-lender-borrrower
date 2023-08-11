@@ -7,7 +7,6 @@ import "./Strategy.sol";
 import {IStrategyInterface} from "./interfaces/IStrategyInterface.sol";
 
 contract TokenizedCompV3LenderBorrowerFactory {
-
     address public immutable managment;
     address public immutable rewards;
     address public immutable keeper;
@@ -39,26 +38,19 @@ contract TokenizedCompV3LenderBorrowerFactory {
 
         // Need to give the address the correct interface.
         IStrategyInterface strategy = IStrategyInterface(
-            address(new Strategy(
-                _asset,
-                _name,
-                _comet,
-                _ethToAssetFee,
-                address(depositer)
-            ))
+            address(
+                new Strategy(
+                    _asset,
+                    _name,
+                    _comet,
+                    _ethToAssetFee,
+                    address(depositer)
+                )
+            )
         );
 
         // Set strategy on Depositer.
         depositer.setStrategy(address(strategy));
-
-        // Set the initial Strategy Params.
-        strategy.setStrategyParams(
-            7_000, // targetLTVMultiplier (default: 7_000)
-            8_000, // warningLTVMultiplier default: 8_000
-            1e10, // min rewards to sell
-            false, // leave debt behind (default: false)
-            40 * 1e9 // max base fee to perform non-emergency tends (default: 40 gwei)
-        );
 
         // Set the addresses.
         strategy.setPerformanceFeeRecipient(rewards);

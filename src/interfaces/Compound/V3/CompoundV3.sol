@@ -62,7 +62,11 @@ interface Comet is IERC20 {
 
     function supply(address asset, uint256 amount) external;
 
-    function supplyTo(address to, address asset, uint256 amount) external;
+    function supplyTo(
+        address to,
+        address asset,
+        uint256 amount
+    ) external;
 
     function withdraw(address asset, uint256 amount) external;
 
@@ -70,31 +74,34 @@ interface Comet is IERC20 {
 
     function getBorrowRate(uint256 utilization) external view returns (uint256);
 
-    function getAssetInfoByAddress(
-        address asset
-    ) external view returns (CometStructs.AssetInfo memory);
+    function getAssetInfoByAddress(address asset)
+        external
+        view
+        returns (CometStructs.AssetInfo memory);
 
-    function getAssetInfo(
-        uint8 i
-    ) external view returns (CometStructs.AssetInfo memory);
+    function getAssetInfo(uint8 i)
+        external
+        view
+        returns (CometStructs.AssetInfo memory);
 
     function borrowBalanceOf(address account) external view returns (uint256);
 
     function getPrice(address priceFeed) external view returns (uint128);
 
-    function userBasic(
-        address
-    ) external view returns (CometStructs.UserBasic memory);
+    function userBasic(address)
+        external
+        view
+        returns (CometStructs.UserBasic memory);
 
     function totalsBasic()
         external
         view
         returns (CometStructs.TotalsBasic memory);
 
-    function userCollateral(
-        address,
-        address
-    ) external view returns (CometStructs.UserCollateral memory);
+    function userCollateral(address, address)
+        external
+        view
+        returns (CometStructs.UserCollateral memory);
 
     function baseTokenPriceFeed() external view returns (address);
 
@@ -112,13 +119,15 @@ interface Comet is IERC20 {
 
     function baseIndexScale() external pure returns (uint64);
 
-    function baseTrackingAccrued(
-        address account
-    ) external view returns (uint64);
+    function baseTrackingAccrued(address account)
+        external
+        view
+        returns (uint64);
 
-    function totalsCollateral(
-        address asset
-    ) external view returns (CometStructs.TotalsCollateral memory);
+    function totalsCollateral(address asset)
+        external
+        view
+        returns (CometStructs.TotalsCollateral memory);
 
     function baseMinForRewards() external view returns (uint256);
 
@@ -132,19 +141,23 @@ interface Comet is IERC20 {
 }
 
 interface CometRewards {
-    function getRewardOwed(
+    function getRewardOwed(address comet, address account)
+        external
+        returns (CometStructs.RewardOwed memory);
+
+    function claim(
         address comet,
-        address account
-    ) external returns (CometStructs.RewardOwed memory);
+        address src,
+        bool shouldAccrue
+    ) external;
 
-    function claim(address comet, address src, bool shouldAccrue) external;
+    function rewardsClaimed(address comet, address account)
+        external
+        view
+        returns (uint256);
 
-    function rewardsClaimed(
-        address comet,
-        address account
-    ) external view returns (uint256);
-
-    function rewardConfig(
-        address comet
-    ) external view returns (CometStructs.RewardConfig memory);
+    function rewardConfig(address comet)
+        external
+        view
+        returns (CometStructs.RewardConfig memory);
 }

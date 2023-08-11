@@ -23,14 +23,14 @@ interface IBaseFeeGlobal {
 contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
     using SafeERC20 for ERC20;
 
-    // if set to true, the strategy will not try to repay debt by selling rewards or asset
+    // If set to true, the strategy will not try to repay debt by selling rewards or asset.
     bool public leaveDebtBehind;
 
-    // This is the address of the main V3 pool
+    // The address of the main V3 pool.
     Comet public immutable comet;
-    // This is the token we will be borrowing/supplying
+    // The token we will be borrowing/supplying.
     address public immutable baseToken;
-    // The contract to get Comp rewards from
+    // The contract to get Comp rewards from.
     CometRewards public constant rewardsContract =
         CometRewards(0x1B0e765F6224C21223AeA2af16c1C46E38885a40);
 
@@ -40,7 +40,7 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
     // The reward Token
     address internal constant comp = 0xc00e94Cb662C3520282E6f5717214004A7f26888;
 
-    // mapping of price feeds. Cheaper and management can customize if needed
+    // mapping of price feeds. Management can customize if needed
     mapping(address => address) public priceFeeds;
 
     // NOTE: LTV = Loan-To-Value = debt/collateral
@@ -54,8 +54,10 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
     uint16 internal constant MAX_BPS = 10_000; // 100%
 
     //Thresholds
-    uint256 internal minThreshold;
-    uint256 public maxGasPriceToTend;
+    uint256 internal immutable minThreshold;
+
+    // The max the base fee will be for a tend.
+    uint256 public maxGasPriceToTend = 70 * 1e9;
 
     constructor(
         address _asset,
@@ -88,7 +90,7 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
         // UniV3 mainnet router.
         router = 0xE592427A0AEce92De3Edee1F18E0157C05861564;
         // Set the min amount for the swapper to sell
-        minAmountToSell = 1e12;
+        minAmountToSell = 1e10;
 
         //Default to .3% pool for comp/eth and to .05% pool for eth/baseToken
         _setFees(3000, 500, _ethToAssetFee);
@@ -121,10 +123,10 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
         maxGasPriceToTend = _maxGasPriceToTend;
     }
 
-    function setPriceFeed(
-        address token,
-        address priceFeed
-    ) external onlyManagement {
+    function setPriceFeed(address token, address priceFeed)
+        external
+        onlyManagement
+    {
         // just check it doesnt revert
         comet.getPrice(priceFeed);
         priceFeeds[token] = priceFeed;
@@ -148,7 +150,6 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
         _setUniFees(baseToken, _weth, _ethToBaseFee);
         _setUniFees(asset, _weth, _ethToAssetFee);
     }
-
 
     /*//////////////////////////////////////////////////////////////
                 NEEDED TO BE OVERRIDEN BY STRATEGIST
@@ -226,10 +227,11 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
             // This will accrue this account as well as the depositer so all future calls are accurate
             _claimAndSellRewards();
 
-            uint256 loose = balanceOfAsset();
-            if (loose > 0) {
-                _leveragePosition(loose);
-            }
+            // Leverage all the asset we have or up to the supply cap.
+            // We want check our leverage even if balance of asset is 0.
+            _leveragePosition(
+                Math.min(balanceOfAsset(), availableDepositLimit(address(this)))
+            );
         }
 
         //base token owed should be 0 here but we count it just in case
@@ -278,9 +280,9 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
             return;
         }
 
+        // Else we need to either adjust LTV up or down.
         _leveragePosition(_totalIdle);
     }
-    
 
     /**
      * @notice Returns wether or not tend() should be called by a keeper.
@@ -298,9 +300,6 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
         // 2. costs are acceptable
         uint256 collateralInUsd = _toUsd(balanceOfCollateral(), asset);
 
-        // Nothing to rebalance if we do not have collateral locked
-        if (collateralInUsd == 0) return false;
-
         uint256 currentLTV = (_toUsd(balanceOfDebt(), baseToken) * 1e18) /
             collateralInUsd;
         uint256 targetLTV = _getTargetLTV();
@@ -313,11 +312,13 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
                     .basefee_global() <= maxGasPriceToTend;
         }
 
-        if (
-            // WE NEED TO TAKE ON MORE DEBT (we need a 10p.p (1000bps) difference)
-            (currentLTV < targetLTV && targetLTV - currentLTV > 1e17) ||
-            (getNetBorrowApr(0) > getNetRewardApr(0)) // UNHEALTHY BORROWING COSTS
-        ) {
+        // If Borrowing costs are to high.
+        if (getNetBorrowApr(0) > getNetRewardApr(0)) {
+            // Tend if we are still levered and base fee is acceptable.
+            return currentLTV != 0 ? _isBaseFeeAcceptable() : false;
+        } else if ((currentLTV < targetLTV && targetLTV - currentLTV > 1e17)) {
+            // Borrowing costs are healthy and WE NEED TO TAKE ON MORE DEBT
+            // (we need a 10p.p (1000bps) difference)
             return _isBaseFeeAcceptable();
         }
 
@@ -346,7 +347,7 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
      * @return . The avialable amount the `_owner` can deposit in terms of `asset`
      */
     function availableDepositLimit(
-        address _owner
+        address /*_owner*/
     ) public view override returns (uint256) {
         return
             uint256(
@@ -358,10 +359,8 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
     // ----------------- INTERNAL FUNCTIONS SUPPORT ----------------- \\
 
     function _leveragePosition(uint256 _amount) internal {
-        // Could be 0 n tends.
-        if (_amount > 0) {
-            _supply(asset, _amount);
-        }
+        // Supply will check _amount for 0.
+        _supply(asset, _amount);
 
         // NOTE: debt + collateral calcs are done in USD
         uint256 collateralInUsd = _toUsd(balanceOfCollateral(), asset);
@@ -380,12 +379,15 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
 
         if (targetLTV > currentLTV) {
             // SUBOPTIMAL RATIO: our current Loan-to-Value is lower than what we want
-            // AND costs are lower than our max acceptable costs
 
             // we need to take on more debt
             uint256 targetDebtUsd = (collateralInUsd * targetLTV) / 1e18;
 
-            uint256 amountToBorrowUsd = targetDebtUsd - debtInUsd; // safe bc we checked ratios
+            uint256 amountToBorrowUsd;
+            unchecked {
+                amountToBorrowUsd = targetDebtUsd - debtInUsd; // safe bc we checked ratios
+            }
+
             // convert to BaseToken
             uint256 amountToBorrowBT = _fromUsd(amountToBorrowUsd, baseToken);
 
@@ -410,9 +412,10 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
 
             // Withdraw the difference from the Depositer
             _withdrawFromDepositer(
-                _fromUsd(debtInUsd - targetDebtUsd,     baseToken)
+                _fromUsd(debtInUsd - targetDebtUsd, baseToken)
             ); // we withdraw from BaseToken depositer
-            _repayTokenDebt(); // we repay the BaseToken debt with compound
+
+            _repayTokenDebt(); // we repay the BaseToken debt.
         }
 
         if (balanceOfBaseToken() > 0) {
@@ -440,12 +443,10 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
         // Withdraw as much as we can up to the amount needed while maintaning a health ltv
         _withdraw(asset, Math.min(_needed, _maxWithdrawal()));
 
-        // it will return the free amount of asset
-        uint256 withdrawn = balanceOfAsset() - balance;
         // we check if we withdrew less than expected, we have not more baseToken
         // left AND should harvest or buy BaseToken with asset (potentially realising losses)
         if (
-            _needed > withdrawn && // if we didn't get enough
+            _needed > balanceOfAsset() - balance && // if we didn't get enough
             balanceOfDebt() > 0 && // still some debt remaining
             balanceOfDepositer() == 0 && // but no capital to repay
             !leaveDebtBehind // if set to true, the strategy will not try to repay debt by selling asset
@@ -506,25 +507,35 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
     }
 
     function _maxWithdrawal() internal view returns (uint256) {
-        uint256 collateralInUsd = _toUsd(balanceOfCollateral(), asset);
-        uint256 debtInUsd = _toUsd(balanceOfDebt(), baseToken);
+        uint256 collateral = balanceOfCollateral();
+        uint256 debt = balanceOfDebt();
 
         // If there is no debt we can withdraw everything
-        if (debtInUsd == 0) return balanceOfCollateral();
+        if (debt == 0) return collateral;
+
+        uint256 debtInUsd = _toUsd(balanceOfDebt(), baseToken);
 
         // What we need to maintain a health LTV
-        uint256 neededCollateralUsd = (debtInUsd * 1e18) / _getTargetLTV();
+        uint256 neededCollateral = _fromUsd(
+            (debtInUsd * 1e18) / _getTargetLTV(),
+            asset
+        );
         // We need more collateral so we cant withdraw anything
-        if (neededCollateralUsd > collateralInUsd) {
+        if (neededCollateral > collateral) {
             return 0;
         }
+
         // Return the difference in terms of asset
-        return _fromUsd(collateralInUsd - neededCollateralUsd, asset);
+        unchecked {
+            return collateral - neededCollateral;
+        }
     }
 
-    function _calculateAmountToRepay(
-        uint256 amount
-    ) internal view returns (uint256) {
+    function _calculateAmountToRepay(uint256 amount)
+        internal
+        view
+        returns (uint256)
+    {
         if (amount == 0) return 0;
         uint256 collateral = balanceOfCollateral();
         // to unlock all collateral we must repay all the debt
@@ -543,28 +554,30 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
     // ----------------- INTERNAL CALCS -----------------
 
     // Returns the _amount of _token in terms of USD, i.e 1e8
-    function _toUsd(
-        uint256 _amount,
-        address _token
-    ) internal view returns (uint256) {
+    function _toUsd(uint256 _amount, address _token)
+        internal
+        view
+        returns (uint256)
+    {
         if (_amount == 0) return _amount;
         // usd price is returned as 1e8
         unchecked {
             return
                 (_amount * getCompoundPrice(_token)) /
-                (10 ** ERC20(_token).decimals());
+                (10**ERC20(_token).decimals());
         }
     }
 
     // Returns the _amount of usd (1e8) in terms of _token
-    function _fromUsd(
-        uint256 _amount,
-        address _token
-    ) internal view returns (uint256) {
+    function _fromUsd(uint256 _amount, address _token)
+        internal
+        view
+        returns (uint256)
+    {
         if (_amount == 0) return _amount;
         unchecked {
             return
-                (_amount * (10 ** ERC20(_token).decimals())) /
+                (_amount * (10**ERC20(_token).decimals())) /
                 getCompoundPrice(_token);
         }
     }
@@ -592,20 +605,23 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
     // Returns the negative position of base token. i.e. borrowed - supplied
     // if supplied is higher it will return 0
     function baseTokenOwedBalance() public view returns (uint256) {
-        uint256 supplied = balanceOfDepositer();
-        uint256 borrowed = balanceOfDebt();
-        uint256 loose = balanceOfBaseToken();
+        uint256 have = balanceOfDepositer() + balanceOfBaseToken();
+        uint256 owe = balanceOfDebt();
 
         // If they are the same or supply > debt return 0
-        if (supplied + loose >= borrowed) return 0;
+        if (have >= owe) return 0;
 
         unchecked {
-            return borrowed - supplied - loose;
+            return owe - have;
         }
     }
 
-    function baseTokenOwedInAsset() internal view returns (uint256) {
-        return _fromUsd(_toUsd(baseTokenOwedBalance(), baseToken), asset);
+    function baseTokenOwedInAsset() internal view returns (uint256 owed) {
+        // Don't do conversions unless it's a non-zero false.
+        uint256 owedInBase = baseTokenOwedBalance();
+        if (owedInBase != 0) {
+            owed = _fromUsd(_toUsd(owedInBase, baseToken), asset);
+        }
     }
 
     function rewardsInAsset() public view returns (uint256) {
@@ -637,9 +653,11 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
     /*
      * Get the price feed address for an asset
      */
-    function getPriceFeedAddress(
-        address _asset
-    ) internal view returns (address priceFeed) {
+    function getPriceFeedAddress(address _asset)
+        internal
+        view
+        returns (address priceFeed)
+    {
         priceFeed = priceFeeds[_asset];
         if (priceFeed == address(0)) {
             priceFeed = comet.getAssetInfoByAddress(_asset).priceFeed;
@@ -649,9 +667,11 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
     /*
      * Get the current price of an _asset from the protocol's persepctive
      */
-    function getCompoundPrice(
-        address _asset
-    ) internal view returns (uint256 price) {
+    function getCompoundPrice(address _asset)
+        internal
+        view
+        returns (uint256 price)
+    {
         price = comet.getPrice(getPriceFeedAddress(_asset));
         // If weth is base token we need to scale response to e18
         if (price == 1e8 && _asset == base) price = 1e18;
@@ -697,11 +717,11 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
     function _claimAndSellRewards() internal {
         _claimRewards();
 
-        uint256 compBalance = ERC20(comp).balanceOf(address(this));
-
+        uint256 compBalance;
         uint256 baseNeeded = baseTokenOwedBalance();
 
         if (baseNeeded > 0) {
+            compBalance = ERC20(comp).balanceOf(address(this));
             // We estimate how much we will need in order to get the amount of base
             // Accounts for slippage and diff from oracle price, just to assure no horrible sandwhich
             uint256 maxComp = (_fromUsd(_toUsd(baseNeeded, baseToken), comp) *
