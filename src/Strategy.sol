@@ -38,7 +38,7 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
     Depositer public immutable depositer;
 
     // The reward Token
-    address internal constant comp = 0xc00e94Cb662C3520282E6f5717214004A7f26888;
+    address internal immutable rewardToken;
 
     // mapping of price feeds. Management can customize if needed
     mapping(address => address) public priceFeeds;
@@ -50,7 +50,6 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
     // Warning LTV: ratio at which we will repay
     uint16 public warningLTVMultiplier = 8_000; // 80% of liquidation LTV
 
-    // support
     uint16 internal constant MAX_BPS = 10_000; // 100%
 
     //Thresholds
@@ -75,6 +74,9 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
         depositer = Depositer(_depositer);
         require(baseToken == address(depositer.baseToken()), "!base");
 
+        // Set the rewardToken token we will get.
+        rewardToken = rewardsContract.rewardConfig(_comet).token;
+
         // to supply asset as collateral
         ERC20(asset).safeApprove(_comet, type(uint256).max);
         // to repay debt
@@ -82,7 +84,7 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
         // for depositer to pull funds to deposit
         ERC20(baseToken).safeApprove(_depositer, type(uint256).max);
         // to sell reward tokens
-        ERC20(comp).safeApprove(address(router), type(uint256).max);
+        ERC20(rewardToken).safeApprove(address(router), type(uint256).max);
 
         // Set the needed variables for the Uni Swapper
         // Base will be weth.
@@ -98,7 +100,7 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
         // set default price feeds
         priceFeeds[baseToken] = comet.baseTokenPriceFeed();
         // default to COMP/USD
-        priceFeeds[comp] = 0xdbd020CAeF83eFd542f4De03e3cF0C28A4428bd5;
+        priceFeeds[rewardToken] = 0xdbd020CAeF83eFd542f4De03e3cF0C28A4428bd5;
         // default to given feed for asset
         priceFeeds[asset] = comet.getAssetInfoByAddress(asset).priceFeed;
     }
@@ -124,29 +126,29 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
     }
 
     function setPriceFeed(
-        address token,
-        address priceFeed
+        address _token,
+        address _priceFeed
     ) external onlyManagement {
         // just check it doesnt revert
-        comet.getPrice(priceFeed);
-        priceFeeds[token] = priceFeed;
+        comet.getPrice(_priceFeed);
+        priceFeeds[_token] = _priceFeed;
     }
 
     function setFees(
-        uint24 _compToEthFee,
+        uint24 _rewardToEthFee,
         uint24 _ethToBaseFee,
         uint24 _ethToAssetFee
     ) external onlyManagement {
-        _setFees(_compToEthFee, _ethToBaseFee, _ethToAssetFee);
+        _setFees(_rewardToEthFee, _ethToBaseFee, _ethToAssetFee);
     }
 
     function _setFees(
-        uint24 _compToEthFee,
+        uint24 _rewardToEthFee,
         uint24 _ethToBaseFee,
         uint24 _ethToAssetFee
     ) internal {
         address _weth = base;
-        _setUniFees(comp, _weth, _compToEthFee);
+        _setUniFees(rewardToken, _weth, _rewardToEthFee);
         _setUniFees(baseToken, _weth, _ethToBaseFee);
         _setUniFees(asset, _weth, _ethToAssetFee);
     }
@@ -232,6 +234,10 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
             _leveragePosition(
                 Math.min(balanceOfAsset(), availableDepositLimit(address(this)))
             );
+        } else {
+            // Accrue the balances of both contracts.
+            comet.accrueAccount(address(this));
+            comet.accrueAccount(address(depositer));
         }
 
         //base token owed should be 0 here but we count it just in case
@@ -281,7 +287,9 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
         }
 
         // Else we need to either adjust LTV up or down.
-        _leveragePosition(_totalIdle);
+        _leveragePosition(
+            Math.min(_totalIdle, availableDepositLimit(address(this)))
+        );
     }
 
     /**
@@ -292,6 +300,8 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
      * @return . Should return true if tend() should be called by keeper or false if not.
      */
     function tendTrigger() public view override returns (bool) {
+        if (comet.isSupplyPaused() || comet.isWithdrawPaused()) return false;
+
         // if we are in danger of being liquidated tend no matter what
         if (comet.isLiquidatable(address(this))) return true;
 
@@ -349,11 +359,66 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
     function availableDepositLimit(
         address /*_owner*/
     ) public view override returns (uint256) {
+        // We need to be able to both supply and withdraw on deposits.
+        if (comet.isSupplyPaused() || comet.isWithdrawPaused()) return 0;
+
         return
             uint256(
                 comet.getAssetInfoByAddress(asset).supplyCap -
                     comet.totalsCollateral(asset).totalSupplyAsset
             );
+    }
+
+    /**
+     * @notice Gets the max amount of `asset` that can be withdrawn.
+     * @dev Defaults to an unlimited amount for any address. But can
+     * be overriden by strategists.
+     *
+     * This function will be called before any withdraw or redeem to enforce
+     * any limits desired by the strategist. This can be used for illiquid
+     * or sandwhichable strategies. It should never be lower than `totalIdle`.
+     *
+     *   EX:
+     *       return TokenIzedStrategy.totalIdle();
+     *
+     * This does not need to take into account the `_owner`'s share balance
+     * or conversion rates from shares to assets.
+     *
+     * @param . The address that is withdrawing from the strategy.
+     * @return . The avialable amount that can be withdrawn in terms of `asset`
+     */
+    function availableWithdrawLimit(
+        address /*_owner*/
+    ) public view override returns (uint256) {
+        // Default liquidity is the balance of base token
+        uint256 liquidity = balanceOfCollateral();
+
+        // If we can't withdraw or supply, set liquidity = 0.
+        if (comet.isSupplyPaused() || comet.isWithdrawPaused()) {
+            liquidity = 0;
+
+            // If there is not enough liquidity to pay back our full debt.
+        } else if (
+            ERC20(baseToken).balanceOf(address(comet)) < balanceOfDebt()
+        ) {
+            // Adjust liquidity based on withdrawing the full amount of debt.
+            unchecked {
+                liquidity =
+                    liquidity -
+                    (
+                        ((_fromUsd(
+                            _toUsd(
+                                balanceOfDebt() -
+                                    ERC20(baseToken).balanceOf(address(comet)),
+                                baseToken
+                            ),
+                            asset
+                        ) * MAX_BPS) / _getTargetLTV())
+                    );
+            }
+        }
+
+        return TokenizedStrategy.totalIdle() + liquidity;
     }
 
     // ----------------- INTERNAL FUNCTIONS SUPPORT ----------------- \\
@@ -623,7 +688,7 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
     function rewardsInAsset() public view returns (uint256) {
         // underreport by 10% for safety
         return
-            (_fromUsd(_toUsd(depositer.getRewardsOwed(), comp), asset) *
+            (_fromUsd(_toUsd(depositer.getRewardsOwed(), rewardToken), asset) *
                 9_000) / MAX_BPS;
     }
 
@@ -709,26 +774,28 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
     function _claimAndSellRewards() internal {
         _claimRewards();
 
-        uint256 compBalance;
+        uint256 rewardTokenBalance;
         uint256 baseNeeded = baseTokenOwedBalance();
 
         if (baseNeeded > 0) {
-            compBalance = ERC20(comp).balanceOf(address(this));
+            rewardTokenBalance = ERC20(rewardToken).balanceOf(address(this));
             // We estimate how much we will need in order to get the amount of base
             // Accounts for slippage and diff from oracle price, just to assure no horrible sandwhich
-            uint256 maxComp = (_fromUsd(_toUsd(baseNeeded, baseToken), comp) *
-                10_500) / MAX_BPS;
-            if (maxComp < compBalance) {
-                // If we have enough swap and exact amount out
-                _swapTo(comp, baseToken, baseNeeded, maxComp);
+            uint256 maxRewardToken = (_fromUsd(
+                _toUsd(baseNeeded, baseToken),
+                rewardToken
+            ) * 10_500) / MAX_BPS;
+            if (maxRewardToken < rewardTokenBalance) {
+                // If we have enough swap an exact amount out
+                _swapTo(rewardToken, baseToken, baseNeeded, maxRewardToken);
             } else {
                 // if not swap everything we have
-                _swapFrom(comp, baseToken, compBalance, 0);
+                _swapFrom(rewardToken, baseToken, rewardTokenBalance, 0);
             }
         }
 
-        compBalance = ERC20(comp).balanceOf(address(this));
-        _swapFrom(comp, asset, compBalance, 0);
+        rewardTokenBalance = ERC20(rewardToken).balanceOf(address(this));
+        _swapFrom(rewardToken, asset, rewardTokenBalance, 0);
     }
 
     // This should only ever get called when withdrawing all funds from the strategy if there is debt left over.

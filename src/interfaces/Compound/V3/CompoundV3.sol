@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.6.12;
+pragma solidity 0.8.18;
 pragma experimental ABIEncoderV2;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -129,6 +129,10 @@ interface Comet is IERC20 {
     function isLiquidatable(address _address) external view returns (bool);
 
     function baseBorrowMin() external view returns (uint256);
+
+    function isSupplyPaused() external view returns (bool);
+
+    function isWithdrawPaused() external view returns (bool);
 }
 
 interface CometRewards {

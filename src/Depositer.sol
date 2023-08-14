@@ -32,14 +32,14 @@ contract Depositer {
     Comet public comet;
     // This is the token we will be borrowing/supplying
     ERC20 public baseToken;
-    // The contract to get Comp rewards from
+    // The contract to get rewards from
     CometRewards public constant rewardsContract =
         CometRewards(0x1B0e765F6224C21223AeA2af16c1C46E38885a40);
 
     IStrategyInterface public strategy;
 
     //The reward Token
-    address internal constant comp = 0xc00e94Cb662C3520282E6f5717214004A7f26888;
+    address internal rewardToken;
 
     modifier onlyManagement() {
         checkManagement();
@@ -98,12 +98,15 @@ contract Depositer {
 
         baseToken.safeApprove(_comet, type(uint256).max);
 
+        rewardToken = rewardsContract.rewardConfig(_comet).token;
+
         //For APR calculations
         uint256 BASE_MANTISSA = comet.baseScale();
         uint256 BASE_INDEX_SCALE = comet.baseIndexScale();
 
         // this is needed for reward apr calculations based on decimals of Asset
-        // we scale rewards per second to the base token decimals and diff between comp decimals and the index scale
+        // we scale rewards per second to the base token decimals and diff between
+        // reward token decimals and the index scale
         SCALER = (BASE_MANTISSA * 1e18) / BASE_INDEX_SCALE;
 
         // default to the base token feed given
@@ -169,10 +172,15 @@ contract Depositer {
     function claimRewards() external onlyStrategy {
         rewardsContract.claim(address(comet), address(this), true);
 
-        uint256 compBal = ERC20(comp).balanceOf(address(this));
+        uint256 rewardTokenBalance = ERC20(rewardToken).balanceOf(
+            address(this)
+        );
 
-        if (compBal > 0) {
-            ERC20(comp).safeTransfer(address(strategy), compBal);
+        if (rewardTokenBalance > 0) {
+            ERC20(rewardToken).safeTransfer(
+                address(strategy),
+                rewardTokenBalance
+            );
         }
     }
 
