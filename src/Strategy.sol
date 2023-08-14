@@ -123,10 +123,10 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
         maxGasPriceToTend = _maxGasPriceToTend;
     }
 
-    function setPriceFeed(address token, address priceFeed)
-        external
-        onlyManagement
-    {
+    function setPriceFeed(
+        address token,
+        address priceFeed
+    ) external onlyManagement {
         // just check it doesnt revert
         comet.getPrice(priceFeed);
         priceFeeds[token] = priceFeed;
@@ -531,11 +531,9 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
         }
     }
 
-    function _calculateAmountToRepay(uint256 amount)
-        internal
-        view
-        returns (uint256)
-    {
+    function _calculateAmountToRepay(
+        uint256 amount
+    ) internal view returns (uint256) {
         if (amount == 0) return 0;
         uint256 collateral = balanceOfCollateral();
         // to unlock all collateral we must repay all the debt
@@ -554,30 +552,28 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
     // ----------------- INTERNAL CALCS -----------------
 
     // Returns the _amount of _token in terms of USD, i.e 1e8
-    function _toUsd(uint256 _amount, address _token)
-        internal
-        view
-        returns (uint256)
-    {
+    function _toUsd(
+        uint256 _amount,
+        address _token
+    ) internal view returns (uint256) {
         if (_amount == 0) return _amount;
         // usd price is returned as 1e8
         unchecked {
             return
                 (_amount * getCompoundPrice(_token)) /
-                (10**ERC20(_token).decimals());
+                (10 ** ERC20(_token).decimals());
         }
     }
 
     // Returns the _amount of usd (1e8) in terms of _token
-    function _fromUsd(uint256 _amount, address _token)
-        internal
-        view
-        returns (uint256)
-    {
+    function _fromUsd(
+        uint256 _amount,
+        address _token
+    ) internal view returns (uint256) {
         if (_amount == 0) return _amount;
         unchecked {
             return
-                (_amount * (10**ERC20(_token).decimals())) /
+                (_amount * (10 ** ERC20(_token).decimals())) /
                 getCompoundPrice(_token);
         }
     }
@@ -653,11 +649,9 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
     /*
      * Get the price feed address for an asset
      */
-    function getPriceFeedAddress(address _asset)
-        internal
-        view
-        returns (address priceFeed)
-    {
+    function getPriceFeedAddress(
+        address _asset
+    ) internal view returns (address priceFeed) {
         priceFeed = priceFeeds[_asset];
         if (priceFeed == address(0)) {
             priceFeed = comet.getAssetInfoByAddress(_asset).priceFeed;
@@ -667,11 +661,9 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
     /*
      * Get the current price of an _asset from the protocol's persepctive
      */
-    function getCompoundPrice(address _asset)
-        internal
-        view
-        returns (uint256 price)
-    {
+    function getCompoundPrice(
+        address _asset
+    ) internal view returns (uint256 price) {
         price = comet.getPrice(getPriceFeedAddress(_asset));
         // If weth is base token we need to scale response to e18
         if (price == 1e8 && _asset == base) price = 1e18;

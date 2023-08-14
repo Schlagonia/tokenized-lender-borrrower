@@ -13,11 +13,7 @@ contract TokenizedCompV3LenderBorrowerFactory {
 
     event Deployed(address indexed depositer, address indexed strategy);
 
-    constructor(
-        address _managment,
-        address _rewards,
-        address _keeper
-    ) {
+    constructor(address _managment, address _rewards, address _keeper) {
         managment = _managment;
         rewards = _rewards;
         keeper = _keeper;

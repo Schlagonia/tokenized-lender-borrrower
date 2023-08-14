@@ -61,10 +61,9 @@ contract Depositer {
 
     event Cloned(address indexed clone);
 
-    function cloneDepositer(address _comet)
-        external
-        returns (address newDepositer)
-    {
+    function cloneDepositer(
+        address _comet
+    ) external returns (address newDepositer) {
         require(original, "!original");
         newDepositer = _clone(_comet);
     }
@@ -203,11 +202,9 @@ contract Depositer {
         return accrued > claimed ? accrued - claimed : 0;
     }
 
-    function getNetBorrowApr(uint256 newAmount)
-        public
-        view
-        returns (uint256 netApr)
-    {
+    function getNetBorrowApr(
+        uint256 newAmount
+    ) public view returns (uint256 netApr) {
         uint256 newUtilization = ((comet.totalBorrow() + newAmount) * 1e18) /
             (comet.totalSupply() + newAmount);
         uint256 borrowApr = getBorrowApr(newUtilization);
@@ -219,11 +216,9 @@ contract Depositer {
     /*
      * Get the current supply APR in Compound III
      */
-    function getSupplyApr(uint256 newUtilization)
-        public
-        view
-        returns (uint256)
-    {
+    function getSupplyApr(
+        uint256 newUtilization
+    ) public view returns (uint256) {
         unchecked {
             return
                 comet.getSupplyRate(
@@ -235,11 +230,9 @@ contract Depositer {
     /*
      * Get the current borrow APR in Compound III
      */
-    function getBorrowApr(uint256 newUtilization)
-        public
-        view
-        returns (uint256)
-    {
+    function getBorrowApr(
+        uint256 newUtilization
+    ) public view returns (uint256) {
         unchecked {
             return
                 comet.getBorrowRate(
@@ -261,11 +254,9 @@ contract Depositer {
      * @param newAmount The new amount we will be supplying
      * @return The reward APR in USD as a decimal scaled up by 1e18
      */
-    function getRewardAprForSupplyBase(uint256 newAmount)
-        public
-        view
-        returns (uint256)
-    {
+    function getRewardAprForSupplyBase(
+        uint256 newAmount
+    ) public view returns (uint256) {
         Comet _comet = comet;
         unchecked {
             uint256 rewardToSuppliersPerDay = _comet.baseTrackingSupplySpeed() *
@@ -285,11 +276,9 @@ contract Depositer {
      * @param newAmount The new amount we will be borrowing
      * @return The reward APR in USD as a decimal scaled up by 1e18
      */
-    function getRewardAprForBorrowBase(uint256 newAmount)
-        public
-        view
-        returns (uint256)
-    {
+    function getRewardAprForBorrowBase(
+        uint256 newAmount
+    ) public view returns (uint256) {
         // borrowBaseRewardApr = (rewardTokenPriceInUsd * rewardToBorrowersPerDay / (baseTokenTotalBorrow * baseTokenPriceInUsd)) * DAYS_PER_YEAR;
         Comet _comet = comet;
         unchecked {
