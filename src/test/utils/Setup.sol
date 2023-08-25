@@ -69,7 +69,7 @@ contract Setup is ExtendedTest, IEvents {
         decimals = asset.decimals();
 
         // Deploy strategy and set variables
-        strategy = IStrategyInterface(setUpStrategy());
+        (depositer, strategy) = setUpStrategy();
 
         factory = strategy.FACTORY();
 
@@ -84,7 +84,7 @@ contract Setup is ExtendedTest, IEvents {
         vm.label(performanceFeeRecipient, "performanceFeeRecipient");
     }
 
-    function setUpStrategy() public returns (address) {
+    function setUpStrategy() public returns (Depositer, IStrategyInterface) {
         strategyFactory = new TokenizedCompV3LenderBorrowerFactory(
             management,
             performanceFeeRecipient,
@@ -104,7 +104,7 @@ contract Setup is ExtendedTest, IEvents {
         vm.prank(management);
         _strategy.acceptManagement();
 
-        return address(_strategy);
+        return (Depositer(_depoister), _strategy);
     }
 
     function depositIntoStrategy(

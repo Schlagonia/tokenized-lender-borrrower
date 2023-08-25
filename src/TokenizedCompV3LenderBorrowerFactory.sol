@@ -10,6 +10,7 @@ contract TokenizedCompV3LenderBorrowerFactory {
     address public immutable managment;
     address public immutable rewards;
     address public immutable keeper;
+    address public immutable originalDepositer;
 
     event Deployed(address indexed depositer, address indexed strategy);
 
@@ -17,6 +18,8 @@ contract TokenizedCompV3LenderBorrowerFactory {
         managment = _managment;
         rewards = _rewards;
         keeper = _keeper;
+        // Deploy an original depositer to clone
+        originalDepositer = address(new Depositer());
     }
 
     function name() external pure returns (string memory) {
@@ -29,8 +32,7 @@ contract TokenizedCompV3LenderBorrowerFactory {
         address _comet,
         uint24 _ethToAssetFee
     ) external returns (address, address) {
-        Depositer depositer = new Depositer();
-        depositer.initialize(_comet);
+        address depositer = Depositer(originalDepositer).cloneDepositer(_comet);
 
         // Need to give the address the correct interface.
         IStrategyInterface strategy = IStrategyInterface(
@@ -46,14 +48,14 @@ contract TokenizedCompV3LenderBorrowerFactory {
         );
 
         // Set strategy on Depositer.
-        depositer.setStrategy(address(strategy));
+        Depositer(depositer).setStrategy(address(strategy));
 
         // Set the addresses.
         strategy.setPerformanceFeeRecipient(rewards);
         strategy.setKeeper(keeper);
         strategy.setPendingManagement(managment);
 
-        emit Deployed(address(depositer), address(strategy));
-        return (address(depositer), address(strategy));
+        emit Deployed(depositer, address(strategy));
+        return (depositer, address(strategy));
     }
 }

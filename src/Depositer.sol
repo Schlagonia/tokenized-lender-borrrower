@@ -302,8 +302,15 @@ contract Depositer {
         }
     }
 
-    function manualWithdraw() external onlyManagement {
-        // Withdraw everything we have
-        comet.withdraw(address(baseToken), accruedCometBalance());
+    function manualWithdraw(uint256 _amount) external onlyManagement {
+        if (_amount != 0) {
+            // Withdraw directly from the comet.
+            comet.withdraw(address(baseToken), _amount);
+        }
+        // Transfer the full loose balance to the strategy.
+        baseToken.safeTransfer(
+            address(strategy),
+            baseToken.balanceOf(address(this))
+        );
     }
 }

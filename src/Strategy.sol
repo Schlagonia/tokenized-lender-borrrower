@@ -34,6 +34,8 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
     CometRewards public constant rewardsContract =
         CometRewards(0x1B0e765F6224C21223AeA2af16c1C46E38885a40);
 
+    address internal constant weth = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+
     // The Contract that will deposit the baseToken back into Compound
     Depositer public immutable depositer;
 
@@ -51,6 +53,9 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
     uint16 public warningLTVMultiplier = 8_000; // 80% of liquidation LTV
 
     uint16 internal constant MAX_BPS = 10_000; // 100%
+
+    // Slippage tolerance for swaps.
+    uint256 public slippage = 500;
 
     //Thresholds
     uint256 internal immutable minThreshold;
@@ -88,7 +93,7 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
 
         // Set the needed variables for the Uni Swapper
         // Base will be weth.
-        base = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+        base = weth;
         // UniV3 mainnet router.
         router = 0xE592427A0AEce92De3Edee1F18E0157C05861564;
         // Set the min amount for the swapper to sell
@@ -111,6 +116,7 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
         uint16 _targetLTVMultiplier,
         uint16 _warningLTVMultiplier,
         uint256 _minToSell,
+        uint256 _slippage,
         bool _leaveDebtBehind,
         uint256 _maxGasPriceToTend
     ) external onlyManagement {
@@ -121,6 +127,7 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
         targetLTVMultiplier = _targetLTVMultiplier;
         warningLTVMultiplier = _warningLTVMultiplier;
         minAmountToSell = _minToSell;
+        require(_slippage < MAX_BPS, "slippage");
         leaveDebtBehind = _leaveDebtBehind;
         maxGasPriceToTend = _maxGasPriceToTend;
     }
@@ -151,6 +158,15 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
         _setUniFees(rewardToken, _weth, _rewardToEthFee);
         _setUniFees(baseToken, _weth, _ethToBaseFee);
         _setUniFees(asset, _weth, _ethToAssetFee);
+    }
+
+    /**
+     * @notice Swap the base token between `asset` and `weth`.
+     * @dev This can be used for management to change which pool
+     * to trade reward tokens.
+     */
+    function swapBase() external onlyManagement {
+        base = base == asset ? weth : asset;
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -309,9 +325,8 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
         // 1. LTV ratios are not in the HEALTHY range (either we take on more debt or repay debt)
         // 2. costs are acceptable
         uint256 collateralInUsd = _toUsd(balanceOfCollateral(), asset);
-
-        uint256 currentLTV = (_toUsd(balanceOfDebt(), baseToken) * 1e18) /
-            collateralInUsd;
+        uint256 debtInUsd = _toUsd(balanceOfDebt(), baseToken);
+        uint256 currentLTV = (debtInUsd * 1e18) / collateralInUsd;
         uint256 targetLTV = _getTargetLTV();
 
         // Check if we are over our warning LTV
@@ -327,9 +342,27 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
             // Tend if we are still levered and base fee is acceptable.
             return currentLTV != 0 ? _isBaseFeeAcceptable() : false;
         } else if ((currentLTV < targetLTV && targetLTV - currentLTV > 1e17)) {
-            // Borrowing costs are healthy and WE NEED TO TAKE ON MORE DEBT
-            // (we need a 10p.p (1000bps) difference)
-            return _isBaseFeeAcceptable();
+            // Make sure the increase in debt would keep borrwing costs healthy.
+            uint256 targetDebtUsd = (collateralInUsd * targetLTV) / 1e18;
+
+            uint256 amountToBorrowUsd;
+            unchecked {
+                amountToBorrowUsd = targetDebtUsd - debtInUsd; // safe bc we checked ratios
+            }
+
+            // convert to BaseToken
+            uint256 amountToBorrowBT = _fromUsd(amountToBorrowUsd, baseToken);
+
+            // We want to make sure that the reward apr > borrow apr so we dont reprot a loss
+            // Borrowing will cause the borrow apr to go up and the rewards apr to go down
+            if (
+                getNetBorrowApr(amountToBorrowBT) <
+                getNetRewardApr(amountToBorrowBT)
+            ) {
+                // Borrowing costs are healthy and WE NEED TO TAKE ON MORE DEBT
+                // (we need a 10p.p (1000bps) difference)
+                return _isBaseFeeAcceptable();
+            }
         }
 
         return false;
@@ -731,7 +764,7 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
     ) internal view returns (uint256 price) {
         price = comet.getPrice(getPriceFeedAddress(_asset));
         // If weth is base token we need to scale response to e18
-        if (price == 1e8 && _asset == base) price = 1e18;
+        if (price == 1e8 && _asset == weth) price = 1e18;
     }
 
     // External function used to easisly calculate the current LTV of the strat
@@ -784,18 +817,28 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
             uint256 maxRewardToken = (_fromUsd(
                 _toUsd(baseNeeded, baseToken),
                 rewardToken
-            ) * 10_500) / MAX_BPS;
+            ) * (MAX_BPS + slippage)) / MAX_BPS;
             if (maxRewardToken < rewardTokenBalance) {
                 // If we have enough swap an exact amount out
                 _swapTo(rewardToken, baseToken, baseNeeded, maxRewardToken);
             } else {
                 // if not swap everything we have
-                _swapFrom(rewardToken, baseToken, rewardTokenBalance, 0);
+                _swapFrom(
+                    rewardToken,
+                    baseToken,
+                    rewardTokenBalance,
+                    _getAmountOut(rewardTokenBalance, rewardToken, baseToken)
+                );
             }
         }
 
         rewardTokenBalance = ERC20(rewardToken).balanceOf(address(this));
-        _swapFrom(rewardToken, asset, rewardTokenBalance, 0);
+        _swapFrom(
+            rewardToken,
+            asset,
+            rewardTokenBalance,
+            _getAmountOut(rewardTokenBalance, rewardToken, asset)
+        );
     }
 
     // This should only ever get called when withdrawing all funds from the strategy if there is debt left over.
@@ -814,12 +857,24 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
             uint256 maxAssetBalance = (_fromUsd(
                 _toUsd(baseStillOwed, baseToken),
                 asset
-            ) * 10_500) / MAX_BPS;
+            ) * (MAX_BPS + slippage)) / MAX_BPS;
             // Under 10 can cause rounding errors from token conversions, no need to swap that small amount
             if (maxAssetBalance <= 10) return;
 
             _swapFrom(asset, baseToken, baseStillOwed, maxAssetBalance);
         }
+    }
+
+    function _getAmountOut(
+        uint256 _amount,
+        address _from,
+        address _to
+    ) internal view returns (uint256) {
+        if (_amount == 0) return 0;
+
+        return
+            (_fromUsd(_toUsd(_amount, _from), _to) * (MAX_BPS - slippage)) /
+            MAX_BPS;
     }
 
     function _isBaseFeeAcceptable() internal view returns (bool) {
