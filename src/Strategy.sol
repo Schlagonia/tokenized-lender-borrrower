@@ -16,10 +16,6 @@ import {UniswapV3Swapper} from "@periphery/swappers/UniswapV3Swapper.sol";
 
 import {Depositer} from "./Depositer.sol";
 
-interface IBaseFeeGlobal {
-    function basefee_global() external view returns (uint256);
-}
-
 contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
     using SafeERC20 for ERC20;
 
