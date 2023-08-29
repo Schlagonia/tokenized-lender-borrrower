@@ -7,7 +7,7 @@ import {IUniswapV3Swapper} from "@periphery/swappers/interfaces/IUniswapV3Swappe
 interface IStrategyInterface is IBaseHealthCheck, IUniswapV3Swapper {
     function baseToken() external view returns (address);
 
-    function depositer() external view returns (address);
+    function depositor() external view returns (address);
 
     function setStrategyParams(
         uint16 _targetLTVMultiplier,
@@ -20,6 +20,6 @@ interface IStrategyInterface is IBaseHealthCheck, IUniswapV3Swapper {
     function initializeCompV3LenderBorrower(
         address _comet,
         uint24 _ethToAssetFee,
-        address _depositer
+        address _depositor
     ) external;
 }

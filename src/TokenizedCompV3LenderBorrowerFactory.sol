@@ -34,7 +34,7 @@ contract TokenizedCompV3LenderBorrowerFactory {
         rewards = _rewards;
         keeper = _keeper;
         // Deploy an original depositor to clone
-        originalDepositor = address(new depositor());
+        originalDepositor = address(new Depositor());
     }
 
     function name() external pure returns (string memory) {
@@ -56,7 +56,7 @@ contract TokenizedCompV3LenderBorrowerFactory {
         address _comet,
         uint24 _ethToAssetFee
     ) external returns (address, address) {
-        address depositor = depositor(originalDepositor).clonedepositor(_comet);
+        address depositor = Depositor(originalDepositor).cloneDepositor(_comet);
 
         // Need to give the address the correct interface
         IStrategyInterface strategy = IStrategyInterface(
@@ -72,7 +72,7 @@ contract TokenizedCompV3LenderBorrowerFactory {
         );
 
         // Set strategy on depositor
-        depositor(depositor).setStrategy(address(strategy));
+        Depositor(depositor).setStrategy(address(strategy));
 
         // Set the addresses
         strategy.setPerformanceFeeRecipient(rewards);

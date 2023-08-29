@@ -13,7 +13,7 @@ import {IStrategyInterface} from "../../interfaces/IStrategyInterface.sol";
 import {IEvents} from "@tokenized-strategy/interfaces/IEvents.sol";
 
 import {TokenizedCompV3LenderBorrowerFactory} from "../../TokenizedCompV3LenderBorrowerFactory.sol";
-import {Depositer} from "../../Depositer.sol";
+import {Depositor} from "../../Depositor.sol";
 import {Strategy} from "../../Strategy.sol";
 
 interface IFactory {
@@ -29,7 +29,7 @@ contract Setup is ExtendedTest, IEvents {
     ERC20 public asset;
     IStrategyInterface public strategy;
     TokenizedCompV3LenderBorrowerFactory public strategyFactory;
-    Depositer public depositer;
+    Depositor public depositor;
 
     mapping(string => address) public tokenAddrs;
     mapping(string => address) public comets;
@@ -69,7 +69,7 @@ contract Setup is ExtendedTest, IEvents {
         decimals = asset.decimals();
 
         // Deploy strategy and set variables
-        (depositer, strategy) = setUpStrategy();
+        (depositor, strategy) = setUpStrategy();
 
         factory = strategy.FACTORY();
 
@@ -79,12 +79,12 @@ contract Setup is ExtendedTest, IEvents {
         vm.label(address(asset), "asset");
         vm.label(management, "management");
         vm.label(address(strategy), "strategy");
-        vm.label(address(depositer), "Depositer");
+        vm.label(address(depositor), "Depositor");
         vm.label(address(strategyFactory), "Strategy Factory");
         vm.label(performanceFeeRecipient, "performanceFeeRecipient");
     }
 
-    function setUpStrategy() public returns (Depositer, IStrategyInterface) {
+    function setUpStrategy() public returns (Depositor, IStrategyInterface) {
         strategyFactory = new TokenizedCompV3LenderBorrowerFactory(
             management,
             performanceFeeRecipient,
@@ -107,7 +107,7 @@ contract Setup is ExtendedTest, IEvents {
         vm.prank(management);
         _strategy.setProfitMaxUnlockTime(1 days);
 
-        return (Depositer(_depoister), _strategy);
+        return (Depositor(_depoister), _strategy);
     }
 
     function depositIntoStrategy(

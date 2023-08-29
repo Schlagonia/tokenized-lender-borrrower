@@ -227,7 +227,7 @@ contract Depositor {
         } else {
             accrued /= config.rescaleFactor;
         }
-        uint256 claimed = rewardsContract.rewardsClaimed(address(_omet), address(this))
+        uint256 claimed = rewardsContract.rewardsClaimed(address(comet), address(this))
             + rewardsContract.rewardsClaimed(address(comet), address(strategy));
 
         return accrued > claimed ? accrued - claimed : 0;
@@ -236,7 +236,7 @@ contract Depositor {
     /**
      * @notice Estimates net borrow APR with a given supply amount
      * @param newAmount The amount to supply
-     * @return The estimated net borrow APR
+     * @return netApr The estimated net borrow APR
      */
     function getNetBorrowApr(uint256 newAmount) public view returns (uint256 netApr) {
         uint256 newUtilization = ((comet.totalBorrow() + newAmount) * 1e18) / (comet.totalSupply() + newAmount);
@@ -310,7 +310,7 @@ contract Depositor {
             uint256 rewardToBorrowersPerDay = comet.baseTrackingBorrowSpeed() * SECONDS_PER_DAY * SCALER;
             if (rewardToBorrowersPerDay == 0) return 0;
             return (
-                (_omet.getPrice(rewardTokenPriceFeed) * rewardToBorrowersPerDay)
+                (comet.getPrice(rewardTokenPriceFeed) * rewardToBorrowersPerDay)
                     / ((comet.totalBorrow() + newAmount) * comet.getPrice(baseTokenPriceFeed))
             ) * DAYS_PER_YEAR;
         }
