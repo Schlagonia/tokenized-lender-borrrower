@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.18;
 
-import {IStrategy} from "@tokenized-strategy/interfaces/IStrategy.sol";
+import {IBaseHealthCheck} from "@periphery/HealthCheck/IBaseHealthCheck.sol";
 import {IUniswapV3Swapper} from "@periphery/swappers/interfaces/IUniswapV3Swapper.sol";
 
-interface IStrategyInterface is IStrategy, IUniswapV3Swapper {
+interface IStrategyInterface is IBaseHealthCheck, IUniswapV3Swapper {
     function baseToken() external view returns (address);
 
     function depositer() external view returns (address);

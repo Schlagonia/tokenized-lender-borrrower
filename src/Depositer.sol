@@ -192,20 +192,21 @@ contract Depositer {
      * Gets the amount of reward tokens due to this contract and the base strategy
      */
     function getRewardsOwed() external view returns (uint256) {
+        Comet _comet = comet;
         CometStructs.RewardConfig memory config = rewardsContract.rewardConfig(
-            address(comet)
+            address(_comet)
         );
-        uint256 accrued = comet.baseTrackingAccrued(address(this)) +
-            comet.baseTrackingAccrued(address(strategy));
+        uint256 accrued = _comet.baseTrackingAccrued(address(this)) +
+            _comet.baseTrackingAccrued(address(strategy));
         if (config.shouldUpscale) {
             accrued *= config.rescaleFactor;
         } else {
             accrued /= config.rescaleFactor;
         }
         uint256 claimed = rewardsContract.rewardsClaimed(
-            address(comet),
+            address(_comet),
             address(this)
-        ) + rewardsContract.rewardsClaimed(address(comet), address(strategy));
+        ) + rewardsContract.rewardsClaimed(address(_comet), address(strategy));
 
         return accrued > claimed ? accrued - claimed : 0;
     }
@@ -213,8 +214,9 @@ contract Depositer {
     function getNetBorrowApr(
         uint256 newAmount
     ) public view returns (uint256 netApr) {
-        uint256 newUtilization = ((comet.totalBorrow() + newAmount) * 1e18) /
-            (comet.totalSupply() + newAmount);
+        Comet _comet = comet;
+        uint256 newUtilization = ((_comet.totalBorrow() + newAmount) * 1e18) /
+            (_comet.totalSupply() + newAmount);
         uint256 borrowApr = getBorrowApr(newUtilization);
         uint256 supplyApr = getSupplyApr(newUtilization);
         // supply rate can be higher than borrow when utilization is very high
