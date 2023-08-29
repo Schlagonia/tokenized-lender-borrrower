@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0
+/// SPDX-License-Identifier: AGPL-3.0
 pragma solidity 0.8.18;
 
 // OpenZeppelin Contracts (last updated v4.8.0) (token/ERC20/ERC20.sol)
@@ -1551,31 +1551,31 @@ interface CometRewards {
 contract Depositor {
     using SafeERC20 for ERC20;
 
-    // Used for cloning
+    /// Used for cloning
     bool public original = true;
 
-    // Used for COMP APR calculations
+    /// Used for COMP APR calculations
     uint64 internal constant DAYS_PER_YEAR = 365;
     uint64 internal constant SECONDS_PER_DAY = 60 * 60 * 24;
     uint64 internal constant SECONDS_PER_YEAR = 365 days;
 
-    // Price feeds for the reward apr calculation, can be updated manually if needed
+    /// Price feeds for the reward apr calculation, can be updated manually if needed
     address public rewardTokenPriceFeed;
     address public baseTokenPriceFeed;
 
-    // Scaler used in reward apr calculations
+    /// Scaler used in reward apr calculations
     uint256 internal SCALER;
 
-    // This is the address of the main V3 pool
+    /// This is the address of the main V3 pool
     Comet public comet;
-    // This is the token we will be borrowing/supplying
+    /// This is the token we will be borrowing/supplying
     ERC20 public baseToken;
-    // The contract to get rewards from
+    /// The contract to get rewards from
     CometRewards public constant rewardsContract = CometRewards(0x45939657d1CA34A8FA39A924B71D28Fe8431e581);
 
     IStrategyInterface public strategy;
 
-    // The reward token.
+    /// The reward token.
     address internal rewardToken;
 
     modifier onlyManagement() {
@@ -1609,11 +1609,11 @@ contract Depositor {
     }
 
     function _clone(address _comet) internal returns (address newDepositor) {
-        // Copied from https://github.com/optionality/clone-factory/blob/master/contracts/CloneFactory.sol
+        /// Copied from https://github.com/optionality/clone-factory/blob/master/contracts/CloneFactory.sol
         bytes20 addressBytes = bytes20(address(this));
 
         assembly {
-            // EIP-1167 bytecode
+            /// EIP-1167 bytecode
             let clone_code := mload(0x40)
             mstore(clone_code, 0x3d602d80600a3d3981f3363d3d373d3d3d363d73000000000000000000000000)
             mstore(add(clone_code, 0x14), addressBytes)
@@ -1638,18 +1638,18 @@ contract Depositor {
 
         rewardToken = rewardsContract.rewardConfig(_comet).token;
 
-        // For APR calculations
+        /// For APR calculations
         uint256 BASE_MANTISSA = comet.baseScale();
         uint256 BASE_INDEX_SCALE = comet.baseIndexScale();
 
-        // This is needed for reward apr calculations based on decimals of asset
-        // we scale rewards per second to the base token decimals and diff between
-        // reward token decimals and the index scale
+        /// This is needed for reward apr calculations based on decimals of asset
+        /// we scale rewards per second to the base token decimals and diff between
+        /// reward token decimals and the index scale
         SCALER = (BASE_MANTISSA * 1e18) / BASE_INDEX_SCALE;
 
-        // Default to the base token feed given
+        /// Default to the base token feed given
         baseTokenPriceFeed = comet.baseTokenPriceFeed();
-        // Default to the COMP/USD feed
+        /// Default to the COMP/USD feed
         rewardTokenPriceFeed = 0x2A8758b7257102461BC958279054e372C2b1bDE6;
     }
 
@@ -1658,14 +1658,14 @@ contract Depositor {
      * @param _strategy The address of the strategy contract
      */
     function setStrategy(address _strategy) external {
-        // Can only set the strategy once
+        /// Can only set the strategy once
         require(address(strategy) == address(0), "set");
 
         strategy = IStrategyInterface(_strategy);
 
-        // Make sure it has the same base token
+        /// Make sure it has the same base token
         require(address(baseToken) == strategy.baseToken(), "!base");
-        // Make sure this contract is set as the depositor
+        /// Make sure this contract is set as the depositor
         require(address(this) == address(strategy.depositor()), "!depositor");
     }
 
@@ -1675,7 +1675,7 @@ contract Depositor {
      * @param _rewardTokenPriceFeed New reward token price feed address
      */
     function setPriceFeeds(address _baseTokenPriceFeed, address _rewardTokenPriceFeed) external onlyManagement {
-        // Just check the call doesnt revert. We dont care about the amount returned
+        /// Just check the call doesnt revert. We dont care about the amount returned
         comet.getPrice(_baseTokenPriceFeed);
         comet.getPrice(_rewardTokenPriceFeed);
         baseTokenPriceFeed = _baseTokenPriceFeed;
@@ -1719,7 +1719,7 @@ contract Depositor {
      */
     function deposit() external onlyStrategy {
         ERC20 _baseToken = baseToken;
-        // msg.sender has been checked to be strategy
+        /// msg.sender has been checked to be strategy
         uint256 _amount = _baseToken.balanceOf(msg.sender);
         if (_amount == 0) return;
 
@@ -1740,9 +1740,9 @@ contract Depositor {
         }
     }
 
-    // ----------------- COMET VIEW FUNCTIONS -----------------
+    /// ----------------- COMET VIEW FUNCTIONS -----------------
 
-    // We put these in the depositor contract to save byte code in the main strategy
+    /// We put these in the depositor contract to save byte code in the main strategy
 
     /**
      * @notice Calculates accrued reward tokens due to this contract and the base strategy
@@ -1771,7 +1771,7 @@ contract Depositor {
         uint256 newUtilization = ((comet.totalBorrow() + newAmount) * 1e18) / (comet.totalSupply() + newAmount);
         uint256 borrowApr = getBorrowApr(newUtilization);
         uint256 supplyApr = getSupplyApr(newUtilization);
-        // Supply rate can be higher than borrow when utilization is very high
+        /// Supply rate can be higher than borrow when utilization is very high
         netApr = borrowApr > supplyApr ? borrowApr - supplyApr : 0;
     }
 
@@ -1783,7 +1783,7 @@ contract Depositor {
     function getSupplyApr(uint256 newUtilization) public view returns (uint256) {
         unchecked {
             return comet.getSupplyRate(
-                newUtilization // New utilization
+                newUtilization /// New utilization
             ) * SECONDS_PER_YEAR;
         }
     }
@@ -1796,7 +1796,7 @@ contract Depositor {
     function getBorrowApr(uint256 newUtilization) public view returns (uint256) {
         unchecked {
             return comet.getBorrowRate(
-                newUtilization // New utilization
+                newUtilization /// New utilization
             ) * SECONDS_PER_YEAR;
         }
     }
@@ -1834,7 +1834,7 @@ contract Depositor {
      * @return The reward APR in USD as a decimal scaled up by 1e18
      */
     function getRewardAprForBorrowBase(uint256 newAmount) public view returns (uint256) {
-        // borrowBaseRewardApr = (rewardTokenPriceInUsd * rewardToBorrowersPerDay / (baseTokenTotalBorrow * baseTokenPriceInUsd)) * DAYS_PER_YEAR;
+        /// borrowBaseRewardApr = (rewardTokenPriceInUsd * rewardToBorrowersPerDay / (baseTokenTotalBorrow * baseTokenPriceInUsd)) * DAYS_PER_YEAR;
         unchecked {
             uint256 rewardToBorrowersPerDay = comet.baseTrackingBorrowSpeed() * SECONDS_PER_DAY * SCALER;
             if (rewardToBorrowersPerDay == 0) return 0;
@@ -1851,10 +1851,10 @@ contract Depositor {
      */
     function manualWithdraw(uint256 _amount) external onlyManagement {
         if (_amount != 0) {
-            // Withdraw directly from the comet
+            /// Withdraw directly from the comet
             comet.withdraw(address(baseToken), _amount);
         }
-        // Transfer the full loose balance to the strategy
+        /// Transfer the full loose balance to the strategy
         baseToken.safeTransfer(address(strategy), baseToken.balanceOf(address(this)));
     }
 }
@@ -2665,7 +2665,7 @@ library Math {
     }
 }
 
-// Uniswap V3 Swapper
+/// Uniswap V3 Swapper
 
 /// @title Callback for IUniswapV3PoolActions#swap
 /// @notice Any contract that calls IUniswapV3PoolActions#swap must implement this interface
@@ -3105,7 +3105,7 @@ abstract contract BaseHealthCheck is BaseTokenizedStrategy {
 /**
  * @title CompV3LenderBorrower
  * @author Schlagonia
- * @notice A Yearn V3 folding strategy for Compound V3.
+ * @notice A Yearn V3 lender borrower strategy for Compound V3.
  */
 contract Strategy is BaseHealthCheck, UniswapV3Swapper {
     using SafeERC20 for ERC20;
@@ -3122,10 +3122,10 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
 
     address internal constant weth = 0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619;
 
-    // The Contract that will deposit the baseToken back into Compound
+    /// The Contract that will deposit the baseToken back into Compound
     Depositor public immutable depositor;
 
-    // The reward Token
+    /// The reward Token
     address public immutable rewardToken;
 
     /// mapping of price feeds. Management can customize if needed
@@ -3141,15 +3141,14 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
     /// Default is set to 80% of the liquidation LTV
     uint16 public warningLTVMultiplier = 8_000;
 
-    /// @notice Slippage tolerance for swaps
-    /// @dev Represents the maximum allowed price slippage percentage for token swaps (in basis points)
+    /// @notice Slippage tolerance (in basis points) for swaps
     /// Default is set to 5%.
     uint256 public slippage = 500;
 
-    // Thresholds: lower limit on how much base token can be borrowed at a time.
+    /// Thresholds: lower limit on how much base token can be borrowed at a time.
     uint256 internal immutable minThreshold;
 
-    // The max the base fee (in gwei) will be for a tend
+    /// The max the base fee (in gwei) will be for a tend
     uint256 public maxGasPriceToTend = 150 * 1e9;
 
     /**
@@ -3163,58 +3162,58 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
     {
         comet = Comet(_comet);
 
-        // Get the baseToken we wil borrow and the min
+        /// Get the baseToken we wil borrow and the min
         baseToken = comet.baseToken();
         minThreshold = comet.baseBorrowMin();
 
         depositor = Depositor(_depositor);
         require(baseToken == address(depositor.baseToken()), "!base");
 
-        // Set the rewardToken token we will get
+        /// Set the rewardToken token we will get
         rewardToken = rewardsContract.rewardConfig(_comet).token;
 
-        // To supply asset as collateral
+        /// To supply asset as collateral
         ERC20(asset).safeApprove(_comet, type(uint256).max);
-        // To repay debt
+        /// To repay debt
         ERC20(baseToken).safeApprove(_comet, type(uint256).max);
-        // For depositor to pull funds to deposit
+        /// For depositor to pull funds to deposit
         ERC20(baseToken).safeApprove(_depositor, type(uint256).max);
-        // To sell reward tokens
+        /// To sell reward tokens
         ERC20(rewardToken).safeApprove(address(router), type(uint256).max);
 
-        // Set the needed variables for the Uni Swapper
-        // Base will be weth
+        /// Set the needed variables for the Uni Swapper
+        /// Base will be weth
         base = weth;
-        // UniV3 mainnet router
+        /// UniV3 mainnet router
         router = 0xE592427A0AEce92De3Edee1F18E0157C05861564;
-        // Set the min amount for the swapper to sell
+        /// Set the min amount for the swapper to sell
         minAmountToSell = 1e10;
 
-        // Default to .3% pool for comp/eth and to .05% pool for eth/baseToken
+        /// Default to .3% pool for comp/eth and to .05% pool for eth/baseToken
         _setFees(3000, 500, _ethToAssetFee);
 
-        // Set default price feeds
+        /// Set default price feeds
         priceFeeds[baseToken] = comet.baseTokenPriceFeed();
-        // Default to COMP/USD
+        /// Default to COMP/USD
         priceFeeds[rewardToken] = 0xdbd020CAeF83eFd542f4De03e3cF0C28A4428bd5;
-        // Default to given feed for asset
+        /// Default to given feed for asset
         priceFeeds[asset] = comet.getAssetInfoByAddress(asset).priceFeed;
     }
 
-    // ----------------- SETTERS -----------------
+    /// ----------------- SETTERS -----------------
 
     /**
-    * @notice Set the parameters for the strategy
-    * @dev Updates multiple strategy parameters to optimize contract bytecode size.
-    * Ensure `_warningLTVMultiplier` is less than 9000 and `_targetLTVMultiplier` is less than `_warningLTVMultiplier`
-    * Can only be called by management
-    * @param _targetLTVMultiplier Desired target loan-to-value multiplier
-    * @param _warningLTVMultiplier Warning threshold for loan-to-value multiplier
-    * @param _minToSell Minimum amount to sell
-    * @param _slippage Allowed slippage percentage
-    * @param _preventDebtRepayment Bool to prevent debt repayment
-    * @param _maxGasPriceToTend Maximum gas price for the tend operation
-    */
+     * @notice Set the parameters for the strategy
+     * @dev Updates multiple strategy parameters to optimize contract bytecode size.
+     * Ensure `_warningLTVMultiplier` is less than 9000 and `_targetLTVMultiplier` is less than `_warningLTVMultiplier`
+     * Can only be called by management
+     * @param _targetLTVMultiplier Desired target loan-to-value multiplier
+     * @param _warningLTVMultiplier Warning threshold for loan-to-value multiplier
+     * @param _minToSell Minimum amount to sell
+     * @param _slippage Allowed slippage percentage
+     * @param _preventDebtRepayment Bool to prevent debt repayment
+     * @param _maxGasPriceToTend Maximum gas price for the tend operation
+     */
     function setStrategyParams(
         uint16 _targetLTVMultiplier,
         uint16 _warningLTVMultiplier,
@@ -3233,35 +3232,35 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
     }
 
     /**
-    * @notice Set the price feed for a given token
-    * @dev Updates the price feed for the specified token after a revert check
-    * Can only be called by management
-    * @param _token Address of the token for which to set the price feed
-    * @param _priceFeed Address of the price feed contract
-    */
+     * @notice Set the price feed for a given token
+     * @dev Updates the price feed for the specified token after a revert check
+     * Can only be called by management
+     * @param _token Address of the token for which to set the price feed
+     * @param _priceFeed Address of the price feed contract
+     */
     function setPriceFeed(address _token, address _priceFeed) external onlyManagement {
         comet.getPrice(_priceFeed);
         priceFeeds[_token] = _priceFeed;
     }
 
     /**
-    * @notice Set the fees for different token swaps
-    * @dev Configures fees for token swaps and can only be called by management
-    * @param _rewardToEthFee Fee for swapping reward tokens to ETH
-    * @param _ethToBaseFee Fee for swapping ETH to base token
-    * @param _ethToAssetFee Fee for swapping ETH to asset token
-    */
+     * @notice Set the fees for different token swaps
+     * @dev Configures fees for token swaps and can only be called by management
+     * @param _rewardToEthFee Fee for swapping reward tokens to ETH
+     * @param _ethToBaseFee Fee for swapping ETH to base token
+     * @param _ethToAssetFee Fee for swapping ETH to asset token
+     */
     function setFees(uint24 _rewardToEthFee, uint24 _ethToBaseFee, uint24 _ethToAssetFee) external onlyManagement {
         _setFees(_rewardToEthFee, _ethToBaseFee, _ethToAssetFee);
     }
 
     /**
-    * @notice Internal function to set the fees for token swaps involving `weth`
-    * @dev Sets the swap fees for rewardToken to WETH, baseToken to WETH, and asset to WETH
-    * @param _rewardToEthFee Fee for swapping reward tokens to WETH
-    * @param _ethToBaseFee Fee for swapping ETH to base token
-    * @param _ethToAssetFee Fee for swapping ETH to asset token
-    */
+     * @notice Internal function to set the fees for token swaps involving `weth`
+     * @dev Sets the swap fees for rewardToken to WETH, baseToken to WETH, and asset to WETH
+     * @param _rewardToEthFee Fee for swapping reward tokens to WETH
+     * @param _ethToBaseFee Fee for swapping ETH to base token
+     * @param _ethToAssetFee Fee for swapping ETH to asset token
+     */
     function _setFees(uint24 _rewardToEthFee, uint24 _ethToBaseFee, uint24 _ethToAssetFee) internal {
         address _weth = base;
         _setUniFees(rewardToken, _weth, _rewardToEthFee);
@@ -3277,9 +3276,9 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
         base = base == asset ? weth : asset;
     }
 
-    /*//////////////////////////////////////////////////////////////
+    /*///////////////////////////////////////////////
                 NEEDED TO BE OVERRIDEN BY STRATEGIST
-    //////////////////////////////////////////////////////////////*/
+    ///////////////////////////////////////////////*/
 
     /**
      * @dev Should deploy up to '_amount' of 'asset' in the yield source.
@@ -3345,29 +3344,29 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
      */
     function _harvestAndReport() internal override returns (uint256 _totalAssets) {
         if (!TokenizedStrategy.isShutdown()) {
-            // 1. claim rewards, 2. even baseToken deposits and borrows 3. sell remainder of rewards to asset
-            // This will accrue this account as well as the depositor so all future calls are accurate
+            /// 1. claim rewards, 2. even baseToken deposits and borrows 3. sell remainder of rewards to asset
+            /// This will accrue this account as well as the depositor so all future calls are accurate
             _claimAndSellRewards();
 
-            // Leverage all the asset we have or up to the supply cap
-            // We want check our leverage even if balance of asset is 0
+            /// Leverage all the asset we have or up to the supply cap
+            /// We want check our leverage even if balance of asset is 0
             _leveragePosition(Math.min(balanceOfAsset(), availableDepositLimit(address(this))));
         } else {
-            // Accrue the balances of both contracts for balances
+            /// Accrue the balances of both contracts for balances
             comet.accrueAccount(address(this));
             comet.accrueAccount(address(depositor));
         }
 
-        // Base token owed should be 0 here but we count it just in case
+        /// Base token owed should be 0 here but we count it just in case
         _totalAssets = balanceOfAsset() + balanceOfCollateral() - _baseTokenOwedInAsset();
 
-        // Health check the amount to report
+        /// Health check the amount to report
         _executeHealthCheck(_totalAssets);
     }
 
-    /*//////////////////////////////////////////////////////////////
+    /*///////////////////////////////////////////////
                     OPTIONAL TO OVERRIDE BY STRATEGIST
-    //////////////////////////////////////////////////////////////*/
+    ///////////////////////////////////////////////*/
 
     /**
      * @dev Optional function for strategist to override that can
@@ -3393,18 +3392,18 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
      * @param _totalIdle The current amount of idle funds that are available to deploy.
      */
     function _tend(uint256 _totalIdle) internal override {
-        // Accrue account for accurate balances
+        /// Accrue account for accurate balances
         comet.accrueAccount(address(this));
 
-        // If the cost to borrow > rewards rate we will pull out all funds to not report a loss
+        /// If the cost to borrow > rewards rate we will pull out all funds to not report a loss
         if (getNetBorrowApr(0) > getNetRewardApr(0)) {
-            // Liquidate everything so not to report a loss
+            /// Liquidate everything so not to report a loss
             _liquidatePosition(balanceOfCollateral());
-            // Return since we dont asset to do anything else
+            /// Return since we dont asset to do anything else
             return;
         }
 
-        // Else we need to either adjust LTV up or down.
+        /// Else we need to either adjust LTV up or down.
         _leveragePosition(Math.min(_totalIdle, availableDepositLimit(address(this))));
     }
 
@@ -3418,45 +3417,46 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
     function tendTrigger() public view override returns (bool) {
         if (comet.isSupplyPaused() || comet.isWithdrawPaused()) return false;
 
-        // If we are in danger of being liquidated tend no matter what
+        /// If we are in danger of being liquidated tend no matter what
         if (comet.isLiquidatable(address(this))) return true;
 
-        // We adjust position if:
-        // 1. LTV ratios are not in the HEALTHY range (either we take on more debt or repay debt)
-        // 2. Costs are acceptable
+        /// We adjust position if:
+        /// 1. LTV ratios are not in the HEALTHY range (either we take on more debt or repay debt)
+        /// 2. Costs are acceptable
         uint256 collateralInUsd = _toUsd(balanceOfCollateral(), asset);
         uint256 debtInUsd = _toUsd(balanceOfDebt(), baseToken);
         uint256 currentLTV = (debtInUsd * 1e18) / collateralInUsd;
         uint256 targetLTV = _getTargetLTV();
 
-        // Check if we are over our warning LTV
+        /// Check if we are over our warning LTV
         if (currentLTV > _getWarningLTV()) {
-            // We have a higher tolerance for gas cost here since we are closer to liquidation
+            /// We have a higher tolerance for gas cost here since we are closer to liquidation
             return _isBaseFeeAcceptable();
         }
 
-        // If Borrowing costs are to high.
+        /// If Borrowing costs are to high.
         if (getNetBorrowApr(0) > getNetRewardApr(0)) {
-            // Tend if we are still levered and base fee is acceptable
+            /// Tend if we are still levered and base fee is acceptable
             return currentLTV != 0 ? _isBaseFeeAcceptable() : false;
 
-            // If we are lower than our target. (we need a 10% (1000bps) difference)
+            /// If we are lower than our target. (we need a 10% (1000bps) difference)
         } else if ((currentLTV < targetLTV && targetLTV - currentLTV > 1e17)) {
-            // Make sure the increase in debt would keep borrwing costs healthy
+            /// Make sure the increase in debt would keep borrwing costs healthy
             uint256 targetDebtUsd = (collateralInUsd * targetLTV) / 1e18;
 
             uint256 amountToBorrowUsd;
             unchecked {
-                amountToBorrowUsd = targetDebtUsd - debtInUsd; // Safe bc we checked ratios
+                amountToBorrowUsd = targetDebtUsd - debtInUsd;
+                /// Safe bc we checked ratios
             }
 
-            // cCnvert to BaseToken
+            /// cCnvert to BaseToken
             uint256 amountToBorrowBT = _fromUsd(amountToBorrowUsd, baseToken);
 
-            // We want to make sure that the reward apr > borrow apr so we dont reprot a loss
-            // Borrowing will cause the borrow apr to go up and the rewards apr to go down
+            /// We want to make sure that the reward apr > borrow apr so we dont reprot a loss
+            /// Borrowing will cause the borrow apr to go up and the rewards apr to go down
             if (getNetBorrowApr(amountToBorrowBT) < getNetRewardApr(amountToBorrowBT)) {
-                // Borrowing costs are healthy and WE NEED TO TAKE ON MORE DEBT
+                /// Borrowing costs are healthy and WE NEED TO TAKE ON MORE DEBT
                 return _isBaseFeeAcceptable();
             }
         }
@@ -3486,7 +3486,7 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
      * @return . The avialable amount the `_owner` can deposit in terms of `asset`
      */
     function availableDepositLimit(address /*_owner*/ ) public view override returns (uint256) {
-        // We need to be able to both supply and withdraw on deposits.
+        /// We need to be able to both supply and withdraw on deposits.
         if (comet.isSupplyPaused() || comet.isWithdrawPaused()) return 0;
 
         return uint256(comet.getAssetInfoByAddress(asset).supplyCap - comet.totalsCollateral(asset).totalSupplyAsset);
@@ -3511,158 +3511,150 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
      * @return . The avialable amount that can be withdrawn in terms of `asset`
      */
     function availableWithdrawLimit(address /*_owner*/ ) public view override returns (uint256) {
-        // Default liquidity is the balance of base token
+        /// Default liquidity is the balance of base token
         uint256 liquidity = balanceOfCollateral();
 
-        // If we can't withdraw or supply, set liquidity = 0.
+        /// If we can't withdraw or supply, set liquidity = 0.
         if (comet.isSupplyPaused() || comet.isWithdrawPaused()) {
             liquidity = 0;
 
-            // If there is not enough liquidity to pay back our full debt.
+            /// If there is not enough liquidity to pay back our full debt.
         } else if (ERC20(baseToken).balanceOf(address(comet)) < balanceOfDebt()) {
-            // Adjust liquidity based on withdrawing the full amount of debt.
+            /// Adjust liquidity based on withdrawing the full amount of debt.
             unchecked {
                 liquidity = (
                     (_fromUsd(_toUsd(ERC20(baseToken).balanceOf(address(comet)), baseToken), asset) * MAX_BPS)
                         / _getTargetLTV()
-                ) - 1; // Minus 1 for rounding.
+                ) - 1;
+                /// Minus 1 for rounding.
             }
         }
 
         return TokenizedStrategy.totalIdle() + liquidity;
     }
 
-    // ----------------- INTERNAL FUNCTIONS SUPPORT ----------------- \\
+    /// ----------------- INTERNAL FUNCTIONS SUPPORT ----------------- \\
 
+    /**
+     * @notice Adjusts the leverage position of the strategy based on current and target Loan-to-Value (LTV) ratios.
+     * @dev All debt and collateral calculations are done in USD terms. LTV values are represented in 1e18 format.
+     * @param _amount The amount to be supplied to adjust the leverage position,
+     */
     function _leveragePosition(uint256 _amount) internal {
-        // Supply will check _amount for 0.
+        /// Supply the given amount to the strategy. This function internally checks for zero amounts.
         _supply(asset, _amount);
 
-        // @notice debt + collateral calcs are done in USD
         uint256 collateralInUsd = _toUsd(balanceOfCollateral(), asset);
-
-        // convert debt to USD
         uint256 debtInUsd = _toUsd(balanceOfDebt(), baseToken);
-
-        // LTV numbers are always in 1e18
         uint256 currentLTV = (debtInUsd * 1e18) / collateralInUsd;
-        uint256 targetLTV = _getTargetLTV(); // 70% under default liquidation Threshold
+        uint256 targetLTV = _getTargetLTV();
 
-        // decide in which range we are and act accordingly:
-        // SUBOPTIMAL(borrow) (e.g. from 0 to 70% liqLTV)
-        // HEALTHY(do nothing) (e.g. from 70% to 80% liqLTV)
-        // UNHEALTHY(repay) (e.g. from 80% to 100% liqLTV)
-
+        /// SUBOPTIMAL RATIO: If current LTV is below the target, potentially increase the debt.
         if (targetLTV > currentLTV) {
-            // SUBOPTIMAL RATIO: our current Loan-to-Value is lower than what we want
-
-            // we need to take on more debt
             uint256 targetDebtUsd = (collateralInUsd * targetLTV) / 1e18;
-
             uint256 amountToBorrowUsd;
+
+            /// Safe subtraction as the ratios were checked earlier.
             unchecked {
-                amountToBorrowUsd = targetDebtUsd - debtInUsd; // safe bc we checked ratios
+                amountToBorrowUsd = targetDebtUsd - debtInUsd;
             }
 
-            // convert to BaseToken
             uint256 amountToBorrowBT = _fromUsd(amountToBorrowUsd, baseToken);
 
-            // We want to make sure that the reward apr > borrow apr so we dont reprot a loss
-            // Borrowing will cause the borrow apr to go up and the rewards apr to go down
+            /// Ensure borrowing doesn't lead to a loss by checking reward APR is higher than borrow APR.
             if (getNetBorrowApr(amountToBorrowBT) > getNetRewardApr(amountToBorrowBT)) {
-                // If we would push it over the limit dont borrow anything
                 amountToBorrowBT = 0;
             }
 
-            // Need to have at least the min set by comet
+            /// Ensure the debt is above a certain minimum threshold before proceeding.
             if (balanceOfDebt() + amountToBorrowBT > minThreshold) {
                 _withdraw(baseToken, amountToBorrowBT);
             }
+
+            /// UNHEALTHY RATIO: If current LTV is too high, reduce the debt.
         } else if (currentLTV > _getWarningLTV()) {
-            // UNHEALTHY RATIO
-            // we repay debt to set it to targetLTV
             uint256 targetDebtUsd = (targetLTV * collateralInUsd) / 1e18;
-
-            // Withdraw the difference from the Depositor
-            _withdrawFromDepositor(_fromUsd(debtInUsd - targetDebtUsd, baseToken)); // we withdraw from BaseToken depositor
-
-            _repayTokenDebt(); // we repay the BaseToken debt.
+            _withdrawFromDepositor(_fromUsd(debtInUsd - targetDebtUsd, baseToken));
+            _repayTokenDebt();
         }
 
+        /// If there are any loose assets, deposit them back. @review when would that be the case?
         if (balanceOfBaseToken() > 0) {
             depositor.deposit();
         }
     }
 
+    /**
+     * @notice Liquidates the position to ensure the needed amount while maintaining healthy ratios.
+     * @dev All debt, collateral, and needed amounts are calculated in USD. The needed amount is represented in the asset.
+     * @param _needed The amount required in the asset.
+     */
     function _liquidatePosition(uint256 _needed) internal {
-        // NOTE: amountNeeded is in asset
-        // NOTE: repayment amount is in BaseToken
-        // NOTE: collateral and debt calcs are done in USD
-
-        // Cache balance for withdraw checks
+        /// Cache current asset balance for withdrawal checks
         uint256 balance = balanceOfAsset();
 
-        // Accrue account for accurate balances
+        /// Update the account balances in the Comet protocol
         comet.accrueAccount(address(this));
 
-        // We first repay whatever we need to repay to keep healthy ratios
+        /// Repay BaseToken debt with the amount withdrawn from the vault to maintain healthy ratios
         _withdrawFromDepositor(_calculateAmountToRepay(_needed));
-
-        // we repay the BaseToken debt with the amount withdrawn from the vault
         _repayTokenDebt();
 
-        // Withdraw as much as we can up to the amount needed while maintaning a health ltv
+        /// Withdraw the required amount or the maximum possible while maintaining a healthy LTV
         _withdraw(asset, Math.min(_needed, _maxWithdrawal()));
 
-        // we check if we withdrew less than expected, we have not more baseToken
-        // left AND should harvest or buy BaseToken with asset (potentially realising losses)
+        /// If the withdrawal wasn't enough, and there's remaining debt without available capital to repay it
         if (
-            _needed > balanceOfAsset() - balance // if we didn't get enough
-                && balanceOfDebt() > 0 // still some debt remaining
-                && balanceOfDepositor() == 0 // but no capital to repay
-                && !preventDebtRepayment // if set to true, the strategy will not try to repay debt by selling asset
+            _needed > balanceOfAsset() - balance && balanceOfDebt() > 0 && balanceOfDepositor() == 0
+                && !preventDebtRepayment
         ) {
-            // using this part of code may result in losses but it is necessary to unlock full collateral in case of wind down
-            // This should only occur when depleting the strategy so we asset to swap the full amount of our debt
-            // we buy BaseToken first with available rewards then with asset
+            /// Repay debt by selling assets, which might result in losses but ensures full collateral release in wind downs
             _buyBaseToken();
-
-            // we repay debt to actually unlock collateral
-            // after this, balanceOfDebt should be 0
             _repayTokenDebt();
 
-            // then we try withdraw once more
-            // still withdraw with target LTV since management can potentially save any left over manually
+            /// Attempt another withdrawal with the target LTV
             _withdraw(asset, _maxWithdrawal());
         }
     }
 
+    /**
+     * @notice Withdraws the required amount from the depositor, ensuring it doesn't exceed available balances.
+     * @dev The function ensures that withdrawals only happen for amounts not already available and considers both the accrued comet balance and liquidity.
+     * @param _amountBT The amount required in BaseToken.
+     */
     function _withdrawFromDepositor(uint256 _amountBT) internal {
+        /// Cache the current BaseToken balance
         uint256 balancePrior = balanceOfBaseToken();
-        // Only withdraw what we dont already have free
+
+        /// Adjust the withdrawal amount based on available balance
         _amountBT = balancePrior >= _amountBT ? 0 : _amountBT - balancePrior;
         if (_amountBT == 0) return;
 
-        // Make sure we have enough balance. This accrues the account first.
+        /// Ensure we do not withdraw more than the accrued balance in the Comet protocol
         _amountBT = Math.min(_amountBT, depositor.accruedCometBalance());
-        // need to check liquidity of the comet
+
+        /// Also ensure we do not exceed the available liquidity of the comet
         _amountBT = Math.min(_amountBT, ERC20(baseToken).balanceOf(address(comet)));
 
         depositor.withdraw(_amountBT);
     }
 
-    /*
-     * Supply an asset that this contract holds to Compound III
-     * This is used both to supply collateral as well as the baseToken
+    /**
+     * @notice Supplies a specified amount of an asset from this contract to Compound III.
+     * @dev Can be used to supply both collateral and baseToken.
+     * @param _asset The asset to be supplied.
+     * @param amount The amount of the asset to supply.
      */
     function _supply(address _asset, uint256 amount) internal {
         if (amount == 0) return;
         comet.supply(_asset, amount);
     }
 
-    /*
-     * Withdraws an _asset from Compound III to this contract
-     * for both collateral and borrowing baseToken
+    /**
+     * @notice Withdraws a specified amount of an asset from Compound III to this contract.
+     * @dev Used for both collateral and borrowing baseToken.
+     * @param _asset The asset to be withdrawn.
+     * @param amount The amount of the asset to withdraw.
      */
     function _withdraw(address _asset, uint256 amount) internal {
         if (amount == 0) return;
@@ -3670,7 +3662,7 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
     }
 
     function _repayTokenDebt() internal {
-        // we cannot pay more than loose balance or more than we owe
+        /// We cannot pay more than loose balance or more than we owe
         _supply(baseToken, Math.min(balanceOfBaseToken(), balanceOfDebt()));
     }
 
@@ -3678,19 +3670,19 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
         uint256 collateral = balanceOfCollateral();
         uint256 debt = balanceOfDebt();
 
-        // If there is no debt we can withdraw everything
+        /// If there is no debt we can withdraw everything
         if (debt == 0) return collateral;
 
         uint256 debtInUsd = _toUsd(balanceOfDebt(), baseToken);
 
-        // What we need to maintain a health LTV
+        /// What we need to maintain a health LTV
         uint256 neededCollateral = _fromUsd((debtInUsd * 1e18) / _getTargetLTV(), asset);
-        // We need more collateral so we cant withdraw anything
+        /// We need more collateral so we cant withdraw anything
         if (neededCollateral > collateral) {
             return 0;
         }
 
-        // Return the difference in terms of asset
+        /// Return the difference in terms of asset
         unchecked {
             return collateral - neededCollateral;
         }
@@ -3699,31 +3691,31 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
     function _calculateAmountToRepay(uint256 amount) internal view returns (uint256) {
         if (amount == 0) return 0;
         uint256 collateral = balanceOfCollateral();
-        // to unlock all collateral we must repay all the debt
+        /// to unlock all collateral we must repay all the debt
         if (amount >= collateral) return balanceOfDebt();
 
-        // we check if the collateral that we are withdrawing leaves us in a risky range, we then take action
+        /// we check if the collateral that we are withdrawing leaves us in a risky range, we then take action
         uint256 newCollateralUsd = _toUsd(collateral - amount, asset);
 
         uint256 targetDebtUsd = (newCollateralUsd * _getTargetLTV()) / 1e18;
         uint256 targetDebt = _fromUsd(targetDebtUsd, baseToken);
         uint256 currentDebt = balanceOfDebt();
-        // Repay only if our target debt is lower than our current debt
+        /// Repay only if our target debt is lower than our current debt
         return targetDebt < currentDebt ? currentDebt - targetDebt : 0;
     }
 
-    // ----------------- INTERNAL CALCS -----------------
+    /// ----------------- INTERNAL CALCS -----------------
 
-    // Returns the _amount of _token in terms of USD, i.e 1e8
+    /// Returns the _amount of _token in terms of USD, i.e 1e8
     function _toUsd(uint256 _amount, address _token) internal view returns (uint256) {
         if (_amount == 0) return _amount;
-        // usd price is returned as 1e8
+        /// usd price is returned as 1e8
         unchecked {
             return (_amount * getCompoundPrice(_token)) / (10 ** ERC20(_token).decimals());
         }
     }
 
-    // Returns the _amount of usd (1e8) in terms of _token
+    /// Returns the _amount of usd (1e8) in terms of _token
     function _fromUsd(uint256 _amount, address _token) internal view returns (uint256) {
         if (_amount == 0) return _amount;
         unchecked {
@@ -3751,13 +3743,13 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
         return comet.borrowBalanceOf(address(this));
     }
 
-    // Returns the negative position of base token. i.e. borrowed - supplied
-    // if supplied is higher it will return 0
+    /// Returns the negative position of base token. i.e. borrowed - supplied
+    /// if supplied is higher it will return 0
     function baseTokenOwedBalance() public view returns (uint256) {
         uint256 have = balanceOfDepositor() + balanceOfBaseToken();
         uint256 owe = balanceOfDebt();
 
-        // If they are the same or supply > debt return 0
+        /// If they are the same or supply > debt return 0
         if (have >= owe) return 0;
 
         unchecked {
@@ -3766,7 +3758,7 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
     }
 
     function _baseTokenOwedInAsset() internal view returns (uint256 owed) {
-        // Don't do conversions unless it's a non-zero false.
+        /// Only convert if the owed amount in base token is non-zero.
         uint256 owedInBase = baseTokenOwedBalance();
         if (owedInBase != 0) {
             owed = _fromUsd(_toUsd(owedInBase, baseToken), asset);
@@ -3774,11 +3766,11 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
     }
 
     function rewardsInAsset() public view returns (uint256) {
-        // underreport by 10% for safety
+        /// underreport by 10% for safety @review why 10%
         return (_fromUsd(_toUsd(depositor.getRewardsOwed(), rewardToken), asset) * 9_000) / MAX_BPS;
     }
 
-    // We put the logic for these APR functions in the depositor contract to save byte code in the main strategy \\
+    /// We put the logic for these APR functions in the depositor contract to save byte code in the main strategy \\
     function getNetBorrowApr(uint256 newAmount) public view returns (uint256) {
         return depositor.getNetBorrowApr(newAmount);
     }
@@ -3787,16 +3779,12 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
         return depositor.getNetRewardApr(newAmount);
     }
 
-    /*
-     * Get the liquidation collateral factor for an asset
-     */
+    /// Get the liquidation collateral factor for an asset
     function getLiquidateCollateralFactor() public view returns (uint256) {
         return uint256(comet.getAssetInfoByAddress(asset).liquidateCollateralFactor);
     }
 
-    /*
-     * Get the price feed address for an asset
-     */
+    /// Get the price feed address for an asset
     function getPriceFeedAddress(address _asset) internal view returns (address priceFeed) {
         priceFeed = priceFeeds[_asset];
         if (priceFeed == address(0)) {
@@ -3804,16 +3792,14 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
         }
     }
 
-    /*
-     * Get the current price of an _asset from the protocol's persepctive
-     */
+    /// Get the current price of an _asset from the protocol's persepctive
     function getCompoundPrice(address _asset) internal view returns (uint256 price) {
         price = comet.getPrice(getPriceFeedAddress(_asset));
-        // If weth is base token we need to scale response to e18
+        /// If weth is base token we need to scale response to e18
         if (price == 1e8 && _asset == weth) price = 1e18;
     }
 
-    // External function used to easisly calculate the current LTV of the strat
+    /// External function used to easisly calculate the current LTV of the strat
     function getCurrentLTV() external view returns (uint256) {
         unchecked {
             return (_toUsd(balanceOfDebt(), baseToken) * 1e18) / _toUsd(balanceOfCollateral(), asset);
@@ -3832,7 +3818,7 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
         }
     }
 
-    // ----------------- HARVEST / TOKEN CONVERSIONS -----------------
+    /// ----------------- HARVEST / TOKEN CONVERSIONS -----------------
 
     function claimRewards() external onlyKeepers {
         _claimRewards();
@@ -3840,7 +3826,7 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
 
     function _claimRewards() internal {
         rewardsContract.claim(address(comet), address(this), true);
-        // Pull rewards from depositor even if not incentivised to accrue the account
+        /// Pull rewards from depositor even if not incentivised to accrue the account
         depositor.claimRewards();
     }
 
@@ -3852,15 +3838,15 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
 
         if (baseNeeded > 0) {
             rewardTokenBalance = ERC20(rewardToken).balanceOf(address(this));
-            // We estimate how much we will need in order to get the amount of base
-            // Accounts for slippage and diff from oracle price, just to assure no horrible sandwhich
+            /// Calculate the maximum amount of reward tokens we'd need to sell to get the required base token,
+            /// taking into account potential slippage and any discrepancies from the oracle price, to avoid sandwich attacks.
             uint256 maxRewardToken =
                 (_fromUsd(_toUsd(baseNeeded, baseToken), rewardToken) * (MAX_BPS + slippage)) / MAX_BPS;
             if (maxRewardToken < rewardTokenBalance) {
-                // If we have enough swap an exact amount out
+                /// If we have more than the maximum reward tokens required, swap the exact amount needed.
                 _swapTo(rewardToken, baseToken, baseNeeded, maxRewardToken);
             } else {
-                // if not swap everything we have
+                /// If we don't have enough reward tokens, swap all of them.
                 _swapFrom(
                     rewardToken,
                     baseToken,
@@ -3874,22 +3860,24 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
         _swapFrom(rewardToken, asset, rewardTokenBalance, _getAmountOut(rewardTokenBalance, rewardToken, asset));
     }
 
-    // This should only ever get called when withdrawing all funds from the strategy if there is debt left over.
-    // It will first try and sell rewards for the needed amount of base token. then will swap asset
-    // Using this in a normal withdraw can cause it to be sandwhiched which is why we use rewards first
+    /**
+     * @dev Buys the base token using the strategy's assets.
+     * This function should only ever be called when withdrawing all funds from the strategy if there is debt left over.
+     * Initially, it tries to sell rewards for the needed amount of base token, then it will swap assets.
+     * Using this function in a standard withdrawal can cause it to be sandwiched, which is why rewards are used first.
+     */
     function _buyBaseToken() internal {
-        // We should be able to get the needed amount from rewards tokens.
-        // We first try that before swapping asset and reporting losses.
+        /// Try to obtain the required amount from rewards tokens before swapping assets and reporting losses.
         _claimAndSellRewards();
 
         uint256 baseStillOwed = baseTokenOwedBalance();
-        // Check if our debt balance is still greater than our base token balance
+        /// Check if our debt balance is still greater than our base token balance.
         if (baseStillOwed > 0) {
-            // Need to account for both slippage and diff in the oracle price.
-            // Should be only swapping very small amounts so its just to make sure there is no massive sandwhich
+            /// Account for slippage and the difference in the oracle price.
+            /// Only small amounts should be swapped to ensure there's no substantial sandwich attack.
             uint256 maxAssetBalance =
                 (_fromUsd(_toUsd(baseStillOwed, baseToken), asset) * (MAX_BPS + slippage)) / MAX_BPS;
-            // Under 10 can cause rounding errors from token conversions, no need to swap that small amount
+            /// Amounts under 10 can lead to rounding errors from token conversions. Avoid swapping such small amounts.
             if (maxAssetBalance <= 10) return;
 
             _swapFrom(asset, baseToken, baseStillOwed, maxAssetBalance);
@@ -3936,13 +3924,13 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
 }
 
 contract TokenizedCompV3LenderBorrowerFactory {
-    /// @notice Address of the contract managing the strategies
+    //// @notice Address of the contract managing the strategies
     address public immutable managment;
-    /// @notice Address where performance fees are sent
+    //// @notice Address where performance fees are sent
     address public immutable rewards;
-    /// @notice Address of the keeper bot
+    //// @notice Address of the keeper bot
     address public immutable keeper;
-    /// @notice Address of the original depositor contract used for cloning
+    //// @notice Address of the original depositor contract used for cloning
     address public immutable originalDepositor;
 
     /**
@@ -3961,7 +3949,7 @@ contract TokenizedCompV3LenderBorrowerFactory {
         managment = _managment;
         rewards = _rewards;
         keeper = _keeper;
-        // Deploy an original depositor to clone
+        /// Deploy an original depositor to clone
         originalDepositor = address(new Depositor());
     }
 
@@ -3986,7 +3974,7 @@ contract TokenizedCompV3LenderBorrowerFactory {
     ) external returns (address, address) {
         address depositor = Depositor(originalDepositor).cloneDepositor(_comet);
 
-        // Need to give the address the correct interface
+        /// Need to give the address the correct interface
         IStrategyInterface strategy = IStrategyInterface(
             address(
                 new Strategy(
@@ -3999,10 +3987,10 @@ contract TokenizedCompV3LenderBorrowerFactory {
             )
         );
 
-        // Set strategy on depositor
+        /// Set strategy on depositor
         Depositor(depositor).setStrategy(address(strategy));
 
-        // Set the addresses
+        /// Set the addresses
         strategy.setPerformanceFeeRecipient(rewards);
         strategy.setKeeper(keeper);
         strategy.setPendingManagement(managment);

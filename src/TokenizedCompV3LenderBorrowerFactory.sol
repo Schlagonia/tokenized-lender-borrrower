@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0
+/// SPDX-License-Identifier: AGPL-3.0
 pragma solidity 0.8.18;
 
 import "./Depositor.sol";
@@ -33,7 +33,7 @@ contract TokenizedCompV3LenderBorrowerFactory {
         managment = _managment;
         rewards = _rewards;
         keeper = _keeper;
-        // Deploy an original depositor to clone
+        /// Deploy an original depositor to clone
         originalDepositor = address(new Depositor());
     }
 
@@ -58,7 +58,7 @@ contract TokenizedCompV3LenderBorrowerFactory {
     ) external returns (address, address) {
         address depositor = Depositor(originalDepositor).cloneDepositor(_comet);
 
-        // Need to give the address the correct interface
+        /// Need to give the address the correct interface
         IStrategyInterface strategy = IStrategyInterface(
             address(
                 new Strategy(
@@ -71,10 +71,10 @@ contract TokenizedCompV3LenderBorrowerFactory {
             )
         );
 
-        // Set strategy on depositor
+        /// Set strategy on depositor
         Depositor(depositor).setStrategy(address(strategy));
 
-        // Set the addresses
+        /// Set the addresses
         strategy.setPerformanceFeeRecipient(rewards);
         strategy.setKeeper(keeper);
         strategy.setPendingManagement(managment);
