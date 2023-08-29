@@ -34,7 +34,7 @@ contract Depositer {
     ERC20 public baseToken;
     // The contract to get rewards from
     CometRewards public constant rewardsContract =
-        CometRewards(0x1B0e765F6224C21223AeA2af16c1C46E38885a40);
+        CometRewards(0x45939657d1CA34A8FA39A924B71D28Fe8431e581);
 
     IStrategyInterface public strategy;
 
@@ -112,7 +112,7 @@ contract Depositer {
         // default to the base token feed given
         baseTokenPriceFeed = comet.baseTokenPriceFeed();
         // default to the COMP/USD feed
-        rewardTokenPriceFeed = 0xdbd020CAeF83eFd542f4De03e3cF0C28A4428bd5;
+        rewardTokenPriceFeed = 0x2A8758b7257102461BC958279054e372C2b1bDE6;
     }
 
     function setStrategy(address _strategy) external {

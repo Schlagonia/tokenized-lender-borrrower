@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.18;
-
+import "forge-std/console.sol";
 import {BaseTokenizedStrategy} from "@tokenized-strategy/BaseTokenizedStrategy.sol";
 
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
@@ -29,9 +29,9 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
     address public immutable baseToken;
     // The contract to get Comp rewards from.
     CometRewards public constant rewardsContract =
-        CometRewards(0x1B0e765F6224C21223AeA2af16c1C46E38885a40);
+        CometRewards(0x45939657d1CA34A8FA39A924B71D28Fe8431e581);
 
-    address internal constant weth = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+    address internal constant weth = 0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619;
 
     // The Contract that will deposit the baseToken back into Compound
     Depositer public immutable depositer;
@@ -56,7 +56,7 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
     uint256 internal immutable minThreshold;
 
     // The max the base fee will be for a tend.
-    uint256 public maxGasPriceToTend = 70 * 1e9;
+    uint256 public maxGasPriceToTend = 150 * 1e9;
 
     constructor(
         address _asset,
@@ -92,7 +92,7 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
         // UniV3 mainnet router.
         router = 0xE592427A0AEce92De3Edee1F18E0157C05861564;
         // Set the min amount for the swapper to sell
-        minAmountToSell = 1e10;
+        minAmountToSell = 1e14;
 
         //Default to .3% pool for comp/eth and to .05% pool for eth/baseToken
         _setFees(3000, 500, _ethToAssetFee);
@@ -100,7 +100,7 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
         // set default price feeds
         priceFeeds[baseToken] = comet.baseTokenPriceFeed();
         // default to COMP/USD
-        priceFeeds[rewardToken] = 0xdbd020CAeF83eFd542f4De03e3cF0C28A4428bd5;
+        priceFeeds[rewardToken] = 0x2A8758b7257102461BC958279054e372C2b1bDE6;
         // default to given feed for asset
         priceFeeds[asset] = comet.getAssetInfoByAddress(asset).priceFeed;
     }
@@ -543,6 +543,9 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
             balanceOfDepositer() == 0 && // but no capital to repay
             !leaveDebtBehind // if set to true, the strategy will not try to repay debt by selling asset
         ) {
+            console.log("Not enough", balanceOfAsset());
+            console.log("Debt ", balanceOfDebt());
+            console.log("depositer ", balanceOfDepositer());
             // using this part of code may result in losses but it is necessary to unlock full collateral in case of wind down
             // This should only occur when depleting the strategy so we asset to swap the full amount of our debt
             // we buy BaseToken first with available rewards then with asset
