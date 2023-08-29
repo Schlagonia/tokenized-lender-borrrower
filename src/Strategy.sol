@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.18;
-import "forge-std/console.sol";
+
 import {BaseTokenizedStrategy} from "@tokenized-strategy/BaseTokenizedStrategy.sol";
 
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
@@ -543,9 +543,6 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
             balanceOfDepositer() == 0 && // but no capital to repay
             !leaveDebtBehind // if set to true, the strategy will not try to repay debt by selling asset
         ) {
-            console.log("Not enough", balanceOfAsset());
-            console.log("Debt ", balanceOfDebt());
-            console.log("depositer ", balanceOfDepositer());
             // using this part of code may result in losses but it is necessary to unlock full collateral in case of wind down
             // This should only occur when depleting the strategy so we asset to swap the full amount of our debt
             // we buy BaseToken first with available rewards then with asset
