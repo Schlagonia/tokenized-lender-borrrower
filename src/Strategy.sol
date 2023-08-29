@@ -13,14 +13,11 @@ import {CometRewards} from "./interfaces/Compound/V3/CompoundV3.sol";
 
 // Uniswap V3 Swapper
 import {UniswapV3Swapper} from "@periphery/swappers/UniswapV3Swapper.sol";
+import {BaseHealthCheck} from "@periphery/HealthCheck/BaseHealthCheck.sol";
 
 import {Depositer} from "./Depositer.sol";
 
-interface IBaseFeeGlobal {
-    function basefee_global() external view returns (uint256);
-}
-
-contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
+contract Strategy is BaseHealthCheck, UniswapV3Swapper {
     using SafeERC20 for ERC20;
 
     // If set to true, the strategy will not try to repay debt by selling rewards or asset.
@@ -40,7 +37,7 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
     Depositer public immutable depositer;
 
     // The reward Token
-    address internal immutable rewardToken;
+    address public immutable rewardToken;
 
     // mapping of price feeds. Management can customize if needed
     mapping(address => address) public priceFeeds;
@@ -51,8 +48,6 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
 
     // Warning LTV: ratio at which we will repay
     uint16 public warningLTVMultiplier = 8_000; // 80% of liquidation LTV
-
-    uint16 internal constant MAX_BPS = 10_000; // 100%
 
     // Slippage tolerance for swaps.
     uint256 public slippage = 500;
@@ -69,7 +64,7 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
         address _comet,
         uint24 _ethToAssetFee,
         address _depositer
-    ) BaseTokenizedStrategy(_asset, _name) {
+    ) BaseHealthCheck(_asset, _name) {
         comet = Comet(_comet);
 
         //Get the baseToken we wil borrow and the min
@@ -251,7 +246,7 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
                 Math.min(balanceOfAsset(), availableDepositLimit(address(this)))
             );
         } else {
-            // Accrue the balances of both contracts.
+            // Accrue the balances of both contracts for balances.
             comet.accrueAccount(address(this));
             comet.accrueAccount(address(depositer));
         }
@@ -260,7 +255,10 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
         _totalAssets =
             balanceOfAsset() +
             balanceOfCollateral() -
-            baseTokenOwedInAsset();
+            _baseTokenOwedInAsset();
+
+        // Health check the amount to report.
+        _executeHealthCheck(_totalAssets);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -332,15 +330,15 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
         // Check if we are over our warning LTV
         if (currentLTV > _getWarningLTV()) {
             // We have a higher tolerance for gas cost here since we are closer to liquidation
-            return
-                IBaseFeeGlobal(0xf8d0Ec04e94296773cE20eFbeeA82e76220cD549)
-                    .basefee_global() <= maxGasPriceToTend;
+            return _isBaseFeeAcceptable();
         }
 
         // If Borrowing costs are to high.
         if (getNetBorrowApr(0) > getNetRewardApr(0)) {
             // Tend if we are still levered and base fee is acceptable.
             return currentLTV != 0 ? _isBaseFeeAcceptable() : false;
+
+            // IF we are lower than our target. (we need a 10% (1000bps) difference)
         } else if ((currentLTV < targetLTV && targetLTV - currentLTV > 1e17)) {
             // Make sure the increase in debt would keep borrwing costs healthy.
             uint256 targetDebtUsd = (collateralInUsd * targetLTV) / 1e18;
@@ -360,7 +358,6 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
                 getNetRewardApr(amountToBorrowBT)
             ) {
                 // Borrowing costs are healthy and WE NEED TO TAKE ON MORE DEBT
-                // (we need a 10p.p (1000bps) difference)
                 return _isBaseFeeAcceptable();
             }
         }
@@ -437,17 +434,14 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
             // Adjust liquidity based on withdrawing the full amount of debt.
             unchecked {
                 liquidity =
-                    liquidity -
-                    (
-                        ((_fromUsd(
-                            _toUsd(
-                                balanceOfDebt() -
-                                    ERC20(baseToken).balanceOf(address(comet)),
-                                baseToken
-                            ),
-                            asset
-                        ) * MAX_BPS) / _getTargetLTV())
-                    );
+                    ((_fromUsd(
+                        _toUsd(
+                            ERC20(baseToken).balanceOf(address(comet)),
+                            baseToken
+                        ),
+                        asset
+                    ) * MAX_BPS) / _getTargetLTV()) -
+                    1; // Minus 1 for rounding.
             }
         }
 
@@ -710,7 +704,7 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
         }
     }
 
-    function baseTokenOwedInAsset() internal view returns (uint256 owed) {
+    function _baseTokenOwedInAsset() internal view returns (uint256 owed) {
         // Don't do conversions unless it's a non-zero false.
         uint256 owedInBase = baseTokenOwedBalance();
         if (owedInBase != 0) {
@@ -878,7 +872,7 @@ contract Strategy is BaseTokenizedStrategy, UniswapV3Swapper {
     }
 
     function _isBaseFeeAcceptable() internal view returns (bool) {
-        return true;
+        return block.basefee <= maxGasPriceToTend;
     }
 
     /**
