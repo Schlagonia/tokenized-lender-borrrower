@@ -22,10 +22,10 @@ import {CometRewards} from "./interfaces/Compound/V3/CompoundV3.sol";
 contract Depositor {
     using SafeERC20 for ERC20;
 
-    // Used for cloning.
+    // Used for cloning
     bool public original = true;
 
-    // Used for COMP APR calculations.
+    // Used for COMP APR calculations
     uint64 internal constant DAYS_PER_YEAR = 365;
     uint64 internal constant SECONDS_PER_DAY = 60 * 60 * 24;
     uint64 internal constant SECONDS_PER_YEAR = 365 days;
