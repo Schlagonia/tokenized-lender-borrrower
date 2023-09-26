@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity 0.8.18;
 
-import "./Depositer.sol";
+import "./Depositor.sol";
 import "./Strategy.sol";
 
 import {IStrategyInterface} from "./interfaces/IStrategyInterface.sol";
@@ -14,14 +14,14 @@ contract TokenizedCompV3LenderBorrowerFactory {
     /// @notice Address of the keeper bot
     address public immutable keeper;
     /// @notice Address of the original depositor contract used for cloning
-    address public immutable originalDepositer;
+    address public immutable originalDepositor;
 
     /**
      * @notice Emitted when a new depositor and strategy are deployed
-     * @param depositer Address of the deployed depositor contract
+     * @param depositor Address of the deployed depositor contract
      * @param strategy Address of the deployed strategy contract
      */
-    event Deployed(address indexed depositer, address indexed strategy);
+    event Deployed(address indexed depositor, address indexed strategy);
 
     /**
      * @param _managment Address of the management contract
@@ -32,8 +32,8 @@ contract TokenizedCompV3LenderBorrowerFactory {
         managment = _managment;
         rewards = _rewards;
         keeper = _keeper;
-        /// Deploy an original depositer to clone
-        originalDepositer = address(new Depositer());
+        /// Deploy an original depositor to clone
+        originalDepositor = address(new Depositor());
     }
 
     function name() external pure returns (string memory) {
@@ -49,11 +49,13 @@ contract TokenizedCompV3LenderBorrowerFactory {
      * @return depositor Address of the deployed depositor
      * @return strategy Address of the deployed strategy
      */
-    function newCompV3LenderBorrower(address _asset, string memory _name, address _comet, uint24 _ethToAssetFee)
-        external
-        returns (address, address)
-    {
-        address depositer = Depositer(originalDepositer).cloneDepositer(_comet);
+    function newCompV3LenderBorrower(
+        address _asset,
+        string memory _name,
+        address _comet,
+        uint24 _ethToAssetFee
+    ) external returns (address, address) {
+        address depositor = Depositor(originalDepositor).cloneDepositor(_comet);
 
         /// Need to give the address the correct interface.
         IStrategyInterface strategy = IStrategyInterface(
@@ -63,20 +65,20 @@ contract TokenizedCompV3LenderBorrowerFactory {
                     _name,
                     _comet,
                     _ethToAssetFee,
-                    address(depositer)
+                    address(depositor)
                 )
             )
         );
 
-        /// Set strategy on Depositer.
-        Depositer(depositer).setStrategy(address(strategy));
+        /// Set strategy on Depositor.
+        Depositor(depositor).setStrategy(address(strategy));
 
         /// Set the addresses.
         strategy.setPerformanceFeeRecipient(rewards);
         strategy.setKeeper(keeper);
         strategy.setPendingManagement(managment);
 
-        emit Deployed(depositer, address(strategy));
-        return (depositer, address(strategy));
+        emit Deployed(depositor, address(strategy));
+        return (depositor, address(strategy));
     }
 }

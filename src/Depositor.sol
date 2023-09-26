@@ -20,7 +20,7 @@ import {CometRewards} from "./interfaces/Compound/V3/CompoundV3.sol";
  *      - Handles the clone logic, being initially deployed via a Factory and subsequently cloned for each Strategy
  */
 
-contract Depositer {
+contract Depositor {
     using SafeERC20 for ERC20;
     /// Used for cloning
 
@@ -43,7 +43,8 @@ contract Depositer {
     /// This is the token we will be borrowing/supplying
     ERC20 public baseToken;
     /// The contract to get rewards from
-    CometRewards public constant rewardsContract = CometRewards(0x45939657d1CA34A8FA39A924B71D28Fe8431e581);
+    CometRewards public constant rewardsContract =
+        CometRewards(0x45939657d1CA34A8FA39A924B71D28Fe8431e581);
 
     IStrategyInterface public strategy;
 
@@ -75,26 +76,34 @@ contract Depositer {
      * @param _comet The address of the Compound market
      * @return newDepositor The address of the cloned depositor contract
      */
-    function cloneDepositer(address _comet) external returns (address newDepositer) {
+    function cloneDepositor(
+        address _comet
+    ) external returns (address newDepositor) {
         require(original, "!original");
-        newDepositer = _clone(_comet);
+        newDepositor = _clone(_comet);
     }
 
-    function _clone(address _comet) internal returns (address newDepositer) {
+    function _clone(address _comet) internal returns (address newDepositor) {
         /// Copied from https://github.com/optionality/clone-factory/blob/master/contracts/CloneFactory.sol
         bytes20 addressBytes = bytes20(address(this));
 
         assembly {
             /// EIP-1167 bytecode
             let clone_code := mload(0x40)
-            mstore(clone_code, 0x3d602d80600a3d3981f3363d3d373d3d3d363d73000000000000000000000000)
+            mstore(
+                clone_code,
+                0x3d602d80600a3d3981f3363d3d373d3d3d363d73000000000000000000000000
+            )
             mstore(add(clone_code, 0x14), addressBytes)
-            mstore(add(clone_code, 0x28), 0x5af43d82803e903d91602b57fd5bf30000000000000000000000000000000000)
-            newDepositer := create(0, clone_code, 0x37)
+            mstore(
+                add(clone_code, 0x28),
+                0x5af43d82803e903d91602b57fd5bf30000000000000000000000000000000000
+            )
+            newDepositor := create(0, clone_code, 0x37)
         }
 
-        Depositer(newDepositer).initialize(_comet);
-        emit Cloned(newDepositer);
+        Depositor(newDepositor).initialize(_comet);
+        emit Cloned(newDepositor);
     }
 
     /**
@@ -135,8 +144,8 @@ contract Depositer {
 
         /// Make sure it has the same base token
         require(address(baseToken) == strategy.baseToken(), "!base");
-        /// Make sure this contract is set as the depositer
-        require(address(this) == address(strategy.depositer()), "!depositer");
+        /// Make sure this contract is set as the depositor
+        require(address(this) == address(strategy.depositor()), "!depositor");
     }
 
     /**
@@ -144,7 +153,10 @@ contract Depositer {
      * @param _baseTokenPriceFeed New base token price feed address
      * @param _rewardTokenPriceFeed New reward token price feed address
      */
-    function setPriceFeeds(address _baseTokenPriceFeed, address _rewardTokenPriceFeed) external onlyManagement {
+    function setPriceFeeds(
+        address _baseTokenPriceFeed,
+        address _rewardTokenPriceFeed
+    ) external onlyManagement {
         ///  Just check the call doesnt revert. We dont care about the amount returned
         comet.getPrice(_baseTokenPriceFeed);
         comet.getPrice(_rewardTokenPriceFeed);
@@ -203,16 +215,21 @@ contract Depositer {
     function claimRewards() external onlyStrategy {
         rewardsContract.claim(address(comet), address(this), true);
 
-        uint256 rewardTokenBalance = ERC20(rewardToken).balanceOf(address(this));
+        uint256 rewardTokenBalance = ERC20(rewardToken).balanceOf(
+            address(this)
+        );
 
         if (rewardTokenBalance > 0) {
-            ERC20(rewardToken).safeTransfer(address(strategy), rewardTokenBalance);
+            ERC20(rewardToken).safeTransfer(
+                address(strategy),
+                rewardTokenBalance
+            );
         }
     }
 
     /// ----------------- COMET VIEW FUNCTIONS -----------------
 
-    /// We put these in the depositer contract to save byte code in the main strategy \\
+    /// We put these in the depositor contract to save byte code in the main strategy \\
 
     /**
      * @notice Calculates accrued reward tokens due to this contract and the base strategy
@@ -220,15 +237,20 @@ contract Depositer {
      */
     function getRewardsOwed() external view returns (uint256) {
         Comet _comet = comet;
-        CometStructs.RewardConfig memory config = rewardsContract.rewardConfig(address(_comet));
-        uint256 accrued = _comet.baseTrackingAccrued(address(this)) + _comet.baseTrackingAccrued(address(strategy));
+        CometStructs.RewardConfig memory config = rewardsContract.rewardConfig(
+            address(_comet)
+        );
+        uint256 accrued = _comet.baseTrackingAccrued(address(this)) +
+            _comet.baseTrackingAccrued(address(strategy));
         if (config.shouldUpscale) {
             accrued *= config.rescaleFactor;
         } else {
             accrued /= config.rescaleFactor;
         }
-        uint256 claimed = rewardsContract.rewardsClaimed(address(_comet), address(this))
-            + rewardsContract.rewardsClaimed(address(_comet), address(strategy));
+        uint256 claimed = rewardsContract.rewardsClaimed(
+            address(_comet),
+            address(this)
+        ) + rewardsContract.rewardsClaimed(address(_comet), address(strategy));
 
         return accrued > claimed ? accrued - claimed : 0;
     }
@@ -238,9 +260,12 @@ contract Depositer {
      * @param newAmount The amount to supply
      * @return netApr The estimated net borrow APR
      */
-    function getNetBorrowApr(uint256 newAmount) public view returns (uint256 netApr) {
+    function getNetBorrowApr(
+        uint256 newAmount
+    ) public view returns (uint256 netApr) {
         Comet _comet = comet;
-        uint256 newUtilization = ((_comet.totalBorrow() + newAmount) * 1e18) / (_comet.totalSupply() + newAmount);
+        uint256 newUtilization = ((_comet.totalBorrow() + newAmount) * 1e18) /
+            (_comet.totalSupply() + newAmount);
         uint256 borrowApr = getBorrowApr(newUtilization);
         uint256 supplyApr = getSupplyApr(newUtilization);
         /// Supply rate can be higher than borrow when utilization is very high
@@ -252,7 +277,9 @@ contract Depositer {
      * @param newUtilization The utilization ratio
      * @return The supply APR
      */
-    function getSupplyApr(uint256 newUtilization) public view returns (uint256) {
+    function getSupplyApr(
+        uint256 newUtilization
+    ) public view returns (uint256) {
         unchecked {
             return comet.getSupplyRate(newUtilization) * SECONDS_PER_YEAR;
         }
@@ -263,7 +290,9 @@ contract Depositer {
      * @param newUtilization The utilization ratio
      * @return The borrow APR
      */
-    function getBorrowApr(uint256 newUtilization) public view returns (uint256) {
+    function getBorrowApr(
+        uint256 newUtilization
+    ) public view returns (uint256) {
         unchecked {
             return comet.getBorrowRate(newUtilization) * SECONDS_PER_YEAR;
         }
@@ -271,7 +300,9 @@ contract Depositer {
 
     function getNetRewardApr(uint256 newAmount) public view returns (uint256) {
         unchecked {
-            return getRewardAprForBorrowBase(newAmount) + getRewardAprForSupplyBase(newAmount);
+            return
+                getRewardAprForBorrowBase(newAmount) +
+                getRewardAprForSupplyBase(newAmount);
         }
     }
 
@@ -280,15 +311,20 @@ contract Depositer {
      * @param newAmount The new amount to supply
      * @return The reward APR in USD as a decimal scaled up by 1e18
      */
-    function getRewardAprForSupplyBase(uint256 newAmount) public view returns (uint256) {
+    function getRewardAprForSupplyBase(
+        uint256 newAmount
+    ) public view returns (uint256) {
         Comet _comet = comet;
         unchecked {
-            uint256 rewardToSuppliersPerDay = _comet.baseTrackingSupplySpeed() * SECONDS_PER_DAY * SCALER;
+            uint256 rewardToSuppliersPerDay = _comet.baseTrackingSupplySpeed() *
+                SECONDS_PER_DAY *
+                SCALER;
             if (rewardToSuppliersPerDay == 0) return 0;
-            return (
-                (_comet.getPrice(rewardTokenPriceFeed) * rewardToSuppliersPerDay)
-                    / ((_comet.totalSupply() + newAmount) * _comet.getPrice(baseTokenPriceFeed))
-            ) * DAYS_PER_YEAR;
+            return
+                ((_comet.getPrice(rewardTokenPriceFeed) *
+                    rewardToSuppliersPerDay) /
+                    ((_comet.totalSupply() + newAmount) *
+                        _comet.getPrice(baseTokenPriceFeed))) * DAYS_PER_YEAR;
         }
     }
 
@@ -297,16 +333,21 @@ contract Depositer {
      * @param newAmount The new amount to borroww
      * @return The reward APR in USD as a decimal scaled up by 1e18
      */
-    function getRewardAprForBorrowBase(uint256 newAmount) public view returns (uint256) {
+    function getRewardAprForBorrowBase(
+        uint256 newAmount
+    ) public view returns (uint256) {
         /// borrowBaseRewardApr = (rewardTokenPriceInUsd * rewardToBorrowersPerDay / (baseTokenTotalBorrow * baseTokenPriceInUsd)) * DAYS_PER_YEAR;
         Comet _comet = comet;
         unchecked {
-            uint256 rewardToBorrowersPerDay = _comet.baseTrackingBorrowSpeed() * SECONDS_PER_DAY * SCALER;
+            uint256 rewardToBorrowersPerDay = _comet.baseTrackingBorrowSpeed() *
+                SECONDS_PER_DAY *
+                SCALER;
             if (rewardToBorrowersPerDay == 0) return 0;
-            return (
-                (_comet.getPrice(rewardTokenPriceFeed) * rewardToBorrowersPerDay)
-                    / ((_comet.totalBorrow() + newAmount) * _comet.getPrice(baseTokenPriceFeed))
-            ) * DAYS_PER_YEAR;
+            return
+                ((_comet.getPrice(rewardTokenPriceFeed) *
+                    rewardToBorrowersPerDay) /
+                    ((_comet.totalBorrow() + newAmount) *
+                        _comet.getPrice(baseTokenPriceFeed))) * DAYS_PER_YEAR;
         }
     }
 
@@ -320,6 +361,9 @@ contract Depositer {
             comet.withdraw(address(baseToken), _amount);
         }
         /// Transfer the full loose balance to the strategy.
-        baseToken.safeTransfer(address(strategy), baseToken.balanceOf(address(this)));
+        baseToken.safeTransfer(
+            address(strategy),
+            baseToken.balanceOf(address(this))
+        );
     }
 }
