@@ -12,7 +12,7 @@ import {Comet} from "./interfaces/Compound/V3/CompoundV3.sol";
 import {CometRewards} from "./interfaces/Compound/V3/CompoundV3.sol";
 
 /**
- * @notice This contract abstracts interactions with Compound V3 protocol, streamlining operations for the main Strategy
+ * @notice This contract deposits and withdraws the borrowed base token for the main Strategy.
  * @dev The Depositor performs several functions:
  *      - Holds and deposits base tokens into Comet, allowing the Strategy to withdraw when repaying debt
  *      - Claims reward tokens from Comet
@@ -23,7 +23,6 @@ import {CometRewards} from "./interfaces/Compound/V3/CompoundV3.sol";
 contract Depositor {
     using SafeERC20 for ERC20;
     /// Used for cloning
-
     bool public original = true;
 
     /// Used for Comp apr calculations
@@ -45,7 +44,7 @@ contract Depositor {
     /// The contract to get rewards from
     CometRewards public constant rewardsContract =
         CometRewards(0x45939657d1CA34A8FA39A924B71D28Fe8431e581);
-
+    /// The specific strategy that uses this depositor
     IStrategyInterface public strategy;
 
     /// The reward Token

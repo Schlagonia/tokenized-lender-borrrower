@@ -375,7 +375,7 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
 
         /// Check if we are over our warning LTV
         if (currentLTV > _getWarningLTV()) {
-            // We have a higher tolerance for gas cost here since we are closer to liquidation
+            // Make sure the gas price isnt to high.
             return _isBaseFeeAcceptable();
         }
 
