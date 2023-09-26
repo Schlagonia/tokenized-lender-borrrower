@@ -23,7 +23,7 @@ contract TokenizedCompV3LenderBorrowerFactory {
     }
 
     function name() external pure returns (string memory) {
-        return "Yearnv3-TokeinzedCompV3LenderBorrowerFactory";
+        return "TokenizedCompV3LenderBorrowerFactory";
     }
 
     function newCompV3LenderBorrower(
