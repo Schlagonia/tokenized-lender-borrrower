@@ -7,18 +7,32 @@ import "./Strategy.sol";
 import {IStrategyInterface} from "./interfaces/IStrategyInterface.sol";
 
 contract TokenizedCompV3LenderBorrowerFactory {
+    /// @notice Address of the contract managing the strategies
     address public immutable managment;
+    /// @notice Address where performance fees are sent
     address public immutable rewards;
+    /// @notice Address of the keeper bot
     address public immutable keeper;
+    /// @notice Address of the original depositor contract used for cloning
     address public immutable originalDepositer;
 
+    /**
+     * @notice Emitted when a new depositor and strategy are deployed
+     * @param depositer Address of the deployed depositor contract
+     * @param strategy Address of the deployed strategy contract
+     */
     event Deployed(address indexed depositer, address indexed strategy);
 
+    /**
+     * @param _managment Address of the management contract
+     * @param _rewards Address where performance fees will be sent
+     * @param _keeper Address of the keeper bot
+     */
     constructor(address _managment, address _rewards, address _keeper) {
         managment = _managment;
         rewards = _rewards;
         keeper = _keeper;
-        // Deploy an original depositer to clone
+        /// Deploy an original depositer to clone
         originalDepositer = address(new Depositer());
     }
 
@@ -26,15 +40,22 @@ contract TokenizedCompV3LenderBorrowerFactory {
         return "Yearnv3-TokeinzedCompV3LenderBorrowerFactory";
     }
 
-    function newCompV3LenderBorrower(
-        address _asset,
-        string memory _name,
-        address _comet,
-        uint24 _ethToAssetFee
-    ) external returns (address, address) {
+    /**
+     * @notice Deploys a new tokenized Compound v3 lender/borrower pair
+     * @param _asset Underlying asset address
+     * @param _name Name for strategy
+     * @param _comet Comet observatory address
+     * @param _ethToAssetFee Conversion fee for ETH to asset
+     * @return depositor Address of the deployed depositor
+     * @return strategy Address of the deployed strategy
+     */
+    function newCompV3LenderBorrower(address _asset, string memory _name, address _comet, uint24 _ethToAssetFee)
+        external
+        returns (address, address)
+    {
         address depositer = Depositer(originalDepositer).cloneDepositer(_comet);
 
-        // Need to give the address the correct interface.
+        /// Need to give the address the correct interface.
         IStrategyInterface strategy = IStrategyInterface(
             address(
                 new Strategy(
@@ -47,10 +68,10 @@ contract TokenizedCompV3LenderBorrowerFactory {
             )
         );
 
-        // Set strategy on Depositer.
+        /// Set strategy on Depositer.
         Depositer(depositer).setStrategy(address(strategy));
 
-        // Set the addresses.
+        /// Set the addresses.
         strategy.setPerformanceFeeRecipient(rewards);
         strategy.setKeeper(keeper);
         strategy.setPendingManagement(managment);
