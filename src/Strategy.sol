@@ -370,7 +370,9 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
         /// 2. costs are acceptable
         uint256 collateralInUsd = _toUsd(balanceOfCollateral(), asset);
         uint256 debtInUsd = _toUsd(balanceOfDebt(), baseToken);
-        uint256 currentLTV = (debtInUsd * 1e18) / collateralInUsd;
+        uint256 currentLTV = collateralInUsd > 0
+            ? (debtInUsd * 1e18) / collateralInUsd
+            : 0;
         uint256 targetLTV = _getTargetLTV();
 
         /// Check if we are over our warning LTV
@@ -379,10 +381,10 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
             return _isBaseFeeAcceptable();
         }
 
-        /// If Borrowing costs are to high.
-        if (getNetBorrowApr(0) > getNetRewardApr(0)) {
-            /// Tend if we are still levered and base fee is acceptable.
-            return currentLTV != 0 ? _isBaseFeeAcceptable() : false;
+        /// If we are still levered and Borrowing costs are too high.
+        if (currentLTV != 0 && getNetBorrowApr(0) > getNetRewardApr(0)) {
+            /// Tend if base fee is acceptable.
+            return _isBaseFeeAcceptable();
 
             /// IF we are lower than our target. (we need a 10% (1000bps) difference)
         } else if ((currentLTV < targetLTV && targetLTV - currentLTV > 1e17)) {
@@ -487,8 +489,7 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
                         ),
                         asset
                     ) * MAX_BPS) / _getTargetLTV()) -
-                    1;
-                /// Minus 1 for rounding.
+                    1; // Minus 1 for rounding.
             }
         }
 
@@ -511,7 +512,9 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
         uint256 debtInUsd = _toUsd(balanceOfDebt(), baseToken);
 
         /// LTV numbers are always in 1e18
-        uint256 currentLTV = (debtInUsd * 1e18) / collateralInUsd;
+        uint256 currentLTV = collateralInUsd > 0
+            ? (debtInUsd * 1e18) / collateralInUsd
+            : 0;
         uint256 targetLTV = _getTargetLTV(); // 70% under default liquidation Threshold
 
         /// decide in which range we are and act accordingly:
@@ -556,11 +559,9 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
             _withdrawFromDepositor(
                 _fromUsd(debtInUsd - targetDebtUsd, baseToken)
             );
-            /// we withdraw from BaseToken depositor
 
+            /// Repay the BaseToken debt.
             _repayTokenDebt();
-
-            /// we repay the BaseToken debt.
         }
 
         if (balanceOfBaseToken() > 0) {
@@ -740,7 +741,7 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
         /// usd price is returned as 1e8
         unchecked {
             return
-                (_amount * getCompoundPrice(_token)) /
+                (_amount * _getCompoundPrice(_token)) /
                 (10 ** ERC20(_token).decimals());
         }
     }
@@ -760,7 +761,7 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
         unchecked {
             return
                 (_amount * (10 ** ERC20(_token).decimals())) /
-                getCompoundPrice(_token);
+                _getCompoundPrice(_token);
         }
     }
 
@@ -877,7 +878,7 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
      * @param _asset The asset address
      * @return priceFeed price feed address
      */
-    function getPriceFeedAddress(
+    function _getPriceFeedAddress(
         address _asset
     ) internal view returns (address priceFeed) {
         priceFeed = priceFeeds[_asset];
@@ -892,10 +893,10 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
      * @param _asset The asset address
      * @return price asset price
      */
-    function getCompoundPrice(
+    function _getCompoundPrice(
         address _asset
     ) internal view returns (uint256 price) {
-        price = comet.getPrice(getPriceFeedAddress(_asset));
+        price = comet.getPrice(_getPriceFeedAddress(_asset));
         /// If weth is base token we need to scale response to e18
         if (price == 1e8 && _asset == weth) price = 1e18;
     }
@@ -1074,8 +1075,14 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
      */
     function _emergencyWithdraw(uint256 _amount) internal override {
         if (_amount > 0) {
-            depositor.withdraw(_amount);
+            depositor.withdraw(
+                Math.min(_amount, depositor.accruedCometBalance())
+            );
         }
+        // Repay everything we can.
         _repayTokenDebt();
+
+        // Withdraw all that makes sense.
+        _withdraw(asset, _maxWithdrawal());
     }
 }

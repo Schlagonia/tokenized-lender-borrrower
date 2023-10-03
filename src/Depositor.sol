@@ -61,11 +61,11 @@ contract Depositor {
     }
 
     function checkManagement() internal view {
-        require(msg.sender == strategy.management(), "!authorized");
+        require(msg.sender == strategy.management(), "!management");
     }
 
     function checkStrategy() internal view {
-        require(msg.sender == address(strategy), "!authorized");
+        require(msg.sender == address(strategy), "!strategy");
     }
 
     event Cloned(address indexed clone);

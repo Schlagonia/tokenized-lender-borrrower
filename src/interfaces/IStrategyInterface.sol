@@ -7,6 +7,8 @@ import {IUniswapV3Swapper} from "@periphery/swappers/interfaces/IUniswapV3Swappe
 interface IStrategyInterface is IBaseHealthCheck, IUniswapV3Swapper {
     function baseToken() external view returns (address);
 
+    function targetLTVMultiplier() external view returns (uint256);
+
     function depositor() external view returns (address);
 
     function setStrategyParams(
@@ -22,4 +24,28 @@ interface IStrategyInterface is IBaseHealthCheck, IUniswapV3Swapper {
         uint24 _ethToAssetFee,
         address _depositer
     ) external;
+
+    function balanceOfAsset() external view returns (uint256);
+
+    function balanceOfCollateral() external view returns (uint256);
+
+    function balanceOfBaseToken() external view returns (uint256);
+
+    function balanceOfDepositor() external view returns (uint256);
+
+    function balanceOfDebt() external view returns (uint256);
+
+    function baseTokenOwedBalance() external view returns (uint256);
+
+    function rewardsInAsset() external view returns (uint256);
+
+    function getNetBorrowApr(uint256 newAmount) external view returns (uint256);
+
+    function getNetRewardApr(uint256 newAmount) external view returns (uint256);
+
+    function getLiquidateCollateralFactor() external view returns (uint256);
+
+    function getCurrentLTV() external view returns (uint256);
+
+    function claimRewards() external;
 }

@@ -22,10 +22,13 @@ contract OperationTest is Setup {
     function test_operation(uint256 _amount) public {
         vm.assume(_amount > minFuzzAmount && _amount < maxFuzzAmount);
 
+        uint256 targetLTV = (strategy.getLiquidateCollateralFactor() *
+            strategy.targetLTVMultiplier()) / MAX_BPS;
         // Deposit into strategy
         mintAndDepositIntoStrategy(strategy, user, _amount);
 
         checkStrategyTotals(strategy, _amount, _amount, 0);
+        assertRelApproxEq(strategy.getCurrentLTV(), targetLTV, 1000);
 
         // Earn Interest
         skip(1 days);
@@ -56,6 +59,8 @@ contract OperationTest is Setup {
     function test_profitableReport(uint256 _amount) public {
         vm.assume(_amount > minFuzzAmount && _amount < maxFuzzAmount);
 
+        uint256 targetLTV = (strategy.getLiquidateCollateralFactor() *
+            strategy.targetLTVMultiplier()) / MAX_BPS;
         // Deposit into strategy
         mintAndDepositIntoStrategy(strategy, user, _amount);
 
@@ -68,6 +73,8 @@ contract OperationTest is Setup {
         vm.prank(keeper);
         (uint256 profit, uint256 loss) = strategy.report();
 
+        assertRelApproxEq(strategy.getCurrentLTV(), targetLTV, 1000);
+        assertGt(strategy.totalAssets(), _amount);
         // Check return Values
         assertGt(profit, 0, "!profit");
         assertEq(loss, 0, "!loss");
@@ -78,17 +85,21 @@ contract OperationTest is Setup {
 
         // Withdraw all funds
         vm.prank(user);
-        strategy.redeem(_amount, user, user);
+        strategy.redeem(_amount / 2, user, user);
 
         assertGe(
             asset.balanceOf(user),
-            balanceBefore + _amount,
+            balanceBefore + (_amount / 2),
             "!final balance"
         );
+
+        assertRelApproxEq(strategy.getCurrentLTV(), targetLTV, 1000);
     }
 
     function test_profitableReport_withFees(uint256 _amount) public {
         vm.assume(_amount > minFuzzAmount && _amount < maxFuzzAmount);
+        uint256 targetLTV = (strategy.getLiquidateCollateralFactor() *
+            strategy.targetLTVMultiplier()) / MAX_BPS;
 
         // Set protofol fee to 0 and perf fee to 10%
         setFees(0, 1_000);
@@ -97,6 +108,7 @@ contract OperationTest is Setup {
         mintAndDepositIntoStrategy(strategy, user, _amount);
 
         checkStrategyTotals(strategy, _amount, _amount, 0);
+        assertRelApproxEq(strategy.getCurrentLTV(), targetLTV, 1000);
 
         // Earn Interest
         skip(1 days);
@@ -104,7 +116,7 @@ contract OperationTest is Setup {
         // Report profit
         vm.prank(keeper);
         (uint256 profit, uint256 loss) = strategy.report();
-
+        assertRelApproxEq(strategy.getCurrentLTV(), targetLTV, 1000);
         // Check return Values
         assertGt(profit, 0, "!profit");
         assertEq(loss, 0, "!loss");
@@ -127,6 +139,8 @@ contract OperationTest is Setup {
             balanceBefore + _amount,
             "!final balance"
         );
+
+        //assertRelApproxEq(strategy.getCurrentLTV(), targetLTV, 1000);
 
         vm.prank(performanceFeeRecipient);
         strategy.redeem(
