@@ -7,3 +7,6 @@
 	url = https://github.com/OpenZeppelin/openzeppelin-contracts
 	branch = v4.8.2
 	
+[submodule "lib/tokenized-strategy"]
+	path = lib/tokenized-strategy
+	url = https://github.com/yearn/tokenized-strategy
