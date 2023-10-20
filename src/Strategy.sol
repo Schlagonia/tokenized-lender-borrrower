@@ -1,10 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.18;
 
-import {BaseTokenizedStrategy} from "@tokenized-strategy/BaseTokenizedStrategy.sol";
-
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
-import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import {CometStructs} from "./interfaces/Compound/V3/CompoundV3.sol";
@@ -13,7 +10,7 @@ import {CometRewards} from "./interfaces/Compound/V3/CompoundV3.sol";
 
 /// Uniswap V3 Swapper
 import {UniswapV3Swapper} from "@periphery/swappers/UniswapV3Swapper.sol";
-import {BaseHealthCheck} from "@periphery/HealthCheck/BaseHealthCheck.sol";
+import {BaseHealthCheck, ERC20} from "@periphery/HealthCheck/BaseHealthCheck.sol";
 
 import {Depositor} from "./Depositor.sol";
 
@@ -92,7 +89,7 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
         rewardToken = rewardsContract.rewardConfig(_comet).token;
 
         /// To supply asset as collateral
-        ERC20(asset).safeApprove(_comet, type(uint256).max);
+        asset.safeApprove(_comet, type(uint256).max);
         /// To repay debt
         ERC20(baseToken).safeApprove(_comet, type(uint256).max);
         /// For depositor to pull funds to deposit
@@ -116,7 +113,9 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
         /// Default to COMP/USD
         priceFeeds[rewardToken] = 0x2A8758b7257102461BC958279054e372C2b1bDE6;
         /// Default to given feed for asset
-        priceFeeds[asset] = comet.getAssetInfoByAddress(asset).priceFeed;
+        priceFeeds[address(asset)] = comet
+            .getAssetInfoByAddress(address(asset))
+            .priceFeed;
     }
 
     /// ----------------- SETTERS -----------------
@@ -164,7 +163,7 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
         address _token,
         address _priceFeed
     ) external onlyManagement {
-        // just check it doesnt revert
+        // just check it doesn't revert
         comet.getPrice(_priceFeed);
         priceFeeds[_token] = _priceFeed;
     }
@@ -199,7 +198,7 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
         address _weth = base;
         _setUniFees(rewardToken, _weth, _rewardToEthFee);
         _setUniFees(baseToken, _weth, _ethToBaseFee);
-        _setUniFees(asset, _weth, _ethToAssetFee);
+        _setUniFees(address(asset), _weth, _ethToAssetFee);
     }
 
     /**
@@ -207,22 +206,22 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
      * @dev This can be used for management to change which pool to trade reward tokens.
      */
     function swapBase() external onlyManagement {
-        base = base == asset ? weth : asset;
+        base = base == address(asset) ? weth : address(asset);
     }
 
-    /*///////////////////////////////////////////////
-                NEEDED TO BE OVERRIDEN BY STRATEGIST
-    ///////////////////////////////////////////////*/
+    /*//////////////////////////////////////////////////////////////
+                NEEDED TO BE OVERRIDDEN BY STRATEGIST
+    //////////////////////////////////////////////////////////////*/
 
     /**
      * @dev Should deploy up to '_amount' of 'asset' in the yield source.
      *
      * This function is called at the end of a {deposit} or {mint}
      * call. Meaning that unless a whitelist is implemented it will
-     * be entirely permsionless and thus can be sandwhiched or otherwise
+     * be entirely permissionless and thus can be sandwiched or otherwise
      * manipulated.
      *
-     * @param _amount The amount of 'asset' that the strategy should attemppt
+     * @param _amount The amount of 'asset' that the strategy should attempt
      * to deposit in the yield source.
      */
     function _deployFunds(uint256 _amount) internal override {
@@ -237,11 +236,11 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
      *
      * This function is called during {withdraw} and {redeem} calls.
      * Meaning that unless a whitelist is implemented it will be
-     * entirely permsionless and thus can be sandwhiched or otherwise
+     * entirely permissionless and thus can be sandwiched or otherwise
      * manipulated.
      *
      * Should not rely on asset.balanceOf(address(this)) calls other than
-     * for diff accounting puroposes.
+     * for diff accounting purposes.
      *
      * Any difference between `_amount` and what is actually freed will be
      * counted as a loss and passed on to the withdrawer. This means
@@ -317,15 +316,15 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
      *
      * If '_tend' is used tendTrigger() will also need to be overridden.
      *
-     * This call can only be called by a persionned role so may be
+     * This call can only be called by a permissioned role so may be
      * through protected relays.
      *
      * This can be used to harvest and compound rewards, deposit idle funds,
-     * perform needed poisition maintence or anything else that doesn't need
+     * perform needed position maintenance or anything else that doesn't need
      * a full report for.
      *
      *   EX: A strategy that can not deposit funds without getting
-     *       sandwhiched can use the tend when a certain threshold
+     *       sandwiched can use the tend when a certain threshold
      *       of idle to totalAssets has been reached.
      *
      * The TokenizedStrategy contract will do all needed debt and idle updates
@@ -342,7 +341,7 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
         if (getNetBorrowApr(0) > getNetRewardApr(0)) {
             /// Liquidate everything so not to report a loss
             _liquidatePosition(balanceOfCollateral());
-            /// Return since we dont asset to do anything else
+            /// Return since we don't asset to do anything else
             return;
         }
 
@@ -353,13 +352,12 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
     }
 
     /**
-     * @notice Returns wether or not tend() should be called by a keeper.
      * @dev Optional trigger to override if tend() will be used by the strategy.
      * This must be implemented if the strategy hopes to invoke _tend().
      *
-     * @return bool Should return true if tend() should be called by keeper or false if not.
+     * @return . Should return true if tend() should be called by keeper or false if not.
      */
-    function tendTrigger() public view override returns (bool) {
+    function _tendTrigger() internal view override returns (bool) {
         if (comet.isSupplyPaused() || comet.isWithdrawPaused()) return false;
 
         /// If we are in danger of being liquidated tend no matter what
@@ -368,7 +366,7 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
         /// We adjust position if:
         /// 1. LTV ratios are not in the HEALTHY range (either we take on more debt or repay debt)
         /// 2. costs are acceptable
-        uint256 collateralInUsd = _toUsd(balanceOfCollateral(), asset);
+        uint256 collateralInUsd = _toUsd(balanceOfCollateral(), address(asset));
         uint256 debtInUsd = _toUsd(balanceOfDebt(), baseToken);
         uint256 currentLTV = collateralInUsd > 0
             ? (debtInUsd * 1e18) / collateralInUsd
@@ -377,7 +375,7 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
 
         /// Check if we are over our warning LTV
         if (currentLTV > _getWarningLTV()) {
-            // Make sure the gas price isnt to high.
+            // Make sure the gas price isn't to high.
             return _isBaseFeeAcceptable();
         }
 
@@ -388,7 +386,7 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
 
             /// IF we are lower than our target. (we need a 10% (1000bps) difference)
         } else if ((currentLTV < targetLTV && targetLTV - currentLTV > 1e17)) {
-            /// Make sure the increase in debt would keep borrwing costs healthy.
+            /// Make sure the increase in debt would keep borrowing costs healthy.
             uint256 targetDebtUsd = (collateralInUsd * targetLTV) / 1e18;
 
             uint256 amountToBorrowUsd;
@@ -399,7 +397,7 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
             /// Convert to BaseToken
             uint256 amountToBorrowBT = _fromUsd(amountToBorrowUsd, baseToken);
 
-            /// We want to make sure that the reward apr > borrow apr so we dont reprot a loss
+            /// We want to make sure that the reward apr > borrow apr so we don't report a loss
             /// Borrowing will cause the borrow apr to go up and the rewards apr to go down
             if (
                 getNetBorrowApr(amountToBorrowBT) <
@@ -414,9 +412,9 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
     }
 
     /**
-     * @notice Gets the max amount of `asset` that an adress can deposit.
+     * @notice Gets the max amount of `asset` that an address can deposit.
      * @dev Defaults to an unlimited amount for any address. But can
-     * be overriden by strategists.
+     * be overridden by strategists.
      *
      * This function will be called before any deposit or mints to enforce
      * any limits desired by the strategist. This can be used for either a
@@ -432,7 +430,7 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
      * by `totalSupply`.
      *
      * @param . The address that is depositing into the strategy.
-     * @return . The avialable amount the `_owner` can deposit in terms of `asset`
+     * @return . The available amount the `_owner` can deposit in terms of `asset`
      */
     function availableDepositLimit(
         address /*_owner*/
@@ -442,19 +440,19 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
 
         return
             uint256(
-                comet.getAssetInfoByAddress(asset).supplyCap -
-                    comet.totalsCollateral(asset).totalSupplyAsset
+                comet.getAssetInfoByAddress(address(asset)).supplyCap -
+                    comet.totalsCollateral(address(asset)).totalSupplyAsset
             );
     }
 
     /**
      * @notice Gets the max amount of `asset` that can be withdrawn.
      * @dev Defaults to an unlimited amount for any address. But can
-     * be overriden by strategists.
+     * be overridden by strategists.
      *
      * This function will be called before any withdraw or redeem to enforce
      * any limits desired by the strategist. This can be used for illiquid
-     * or sandwhichable strategies. It should never be lower than `totalIdle`.
+     * or sandwichable strategies. It should never be lower than `totalIdle`.
      *
      *   EX:
      *       return TokenIzedStrategy.totalIdle();
@@ -463,7 +461,7 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
      * or conversion rates from shares to assets.
      *
      * @param . The address that is withdrawing from the strategy.
-     * @return . The avialable amount that can be withdrawn in terms of `asset`
+     * @return . The available amount that can be withdrawn in terms of `asset`
      */
     function availableWithdrawLimit(
         address /*_owner*/
@@ -487,7 +485,7 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
                             ERC20(baseToken).balanceOf(address(comet)),
                             baseToken
                         ),
-                        asset
+                        address(asset)
                     ) * MAX_BPS) / _getTargetLTV()) -
                     1; // Minus 1 for rounding.
             }
@@ -505,8 +503,9 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
      */
     function _leveragePosition(uint256 _amount) internal {
         /// Supply the given amount to the strategy. This function internally checks for zero amounts.
-        _supply(asset, _amount);
-        uint256 collateralInUsd = _toUsd(balanceOfCollateral(), asset);
+        _supply(address(asset), _amount);
+
+        uint256 collateralInUsd = _toUsd(balanceOfCollateral(), address(asset));
 
         /// Convert debt to USD
         uint256 debtInUsd = _toUsd(balanceOfDebt(), baseToken);
@@ -536,13 +535,13 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
             /// convert to BaseToken
             uint256 amountToBorrowBT = _fromUsd(amountToBorrowUsd, baseToken);
 
-            /// We want to make sure that the reward apr > borrow apr so we dont reprot a loss
+            /// We want to make sure that the reward apr > borrow apr so we don't report a loss
             /// Borrowing will cause the borrow apr to go up and the rewards apr to go down
             if (
                 getNetBorrowApr(amountToBorrowBT) >
                 getNetRewardApr(amountToBorrowBT)
             ) {
-                /// If we would push it over the limit dont borrow anything
+                /// If we would push it over the limit don't borrow anything
                 amountToBorrowBT = 0;
             }
 
@@ -587,8 +586,8 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
         /// we repay the BaseToken debt with the amount withdrawn from the vault
         _repayTokenDebt();
 
-        // Withdraw as much as we can up to the amount needed while maintaning a health ltv
-        _withdraw(asset, Math.min(_needed, _maxWithdrawal()));
+        // Withdraw as much as we can up to the amount needed while maintaining a health ltv
+        _withdraw(address(asset), Math.min(_needed, _maxWithdrawal()));
 
         /// we check if we withdrew less than expected, we have not more baseToken
         /// left AND should harvest or buy BaseToken with asset (potentially realising losses)
@@ -613,7 +612,7 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
 
             /// then we try withdraw once more
             /// still withdraw with target LTV since management can potentially save any left over manually
-            _withdraw(asset, _maxWithdrawal());
+            _withdraw(address(asset), _maxWithdrawal());
         }
     }
 
@@ -624,7 +623,7 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
      */
     function _withdrawFromDepositor(uint256 _amountBT) internal {
         uint256 balancePrior = balanceOfBaseToken();
-        /// Only withdraw what we dont already have free
+        /// Only withdraw what we don't already have free
         _amountBT = balancePrior >= _amountBT ? 0 : _amountBT - balancePrior;
         if (_amountBT == 0) return;
 
@@ -687,7 +686,7 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
         /// What we need to maintain a health LTV
         uint256 neededCollateral = _fromUsd(
             (debtInUsd * 1e18) / _getTargetLTV(),
-            asset
+            address(asset)
         );
         /// We need more collateral so we cant withdraw anything
         if (neededCollateral > collateral) {
@@ -715,7 +714,7 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
         if (amount >= collateral) return balanceOfDebt();
 
         /// We check if the collateral that we are withdrawing leaves us in a risky range, we then take action
-        uint256 newCollateralUsd = _toUsd(collateral - amount, asset);
+        uint256 newCollateralUsd = _toUsd(collateral - amount, address(asset));
 
         uint256 targetDebtUsd = (newCollateralUsd * _getTargetLTV()) / 1e18;
         uint256 targetDebt = _fromUsd(targetDebtUsd, baseToken);
@@ -770,7 +769,7 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
      * @return The asset token balance
      */
     function balanceOfAsset() public view returns (uint256) {
-        return ERC20(asset).balanceOf(address(this));
+        return asset.balanceOf(address(this));
     }
 
     /**
@@ -778,7 +777,10 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
      * @return Collateral balance
      */
     function balanceOfCollateral() public view returns (uint256) {
-        return uint256(comet.userCollateral(address(this), asset).balance);
+        return
+            uint256(
+                comet.userCollateral(address(this), address(asset)).balance
+            );
     }
 
     /**
@@ -829,7 +831,7 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
         /// Don't do conversions unless it's a non-zero false.
         uint256 owedInBase = baseTokenOwedBalance();
         if (owedInBase != 0) {
-            owed = _fromUsd(_toUsd(owedInBase, baseToken), asset);
+            owed = _fromUsd(_toUsd(owedInBase, baseToken), address(asset));
         }
     }
 
@@ -838,10 +840,12 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
      * @return Estimated rewards in asset value
      */
     function rewardsInAsset() public view returns (uint256) {
-        /// Underreport by 10% for safety
+        /// Under report by 10% for safety
         return
-            (_fromUsd(_toUsd(depositor.getRewardsOwed(), rewardToken), asset) *
-                9_000) / MAX_BPS;
+            (_fromUsd(
+                _toUsd(depositor.getRewardsOwed(), rewardToken),
+                address(asset)
+            ) * 9_000) / MAX_BPS;
     }
 
     /**
@@ -869,7 +873,9 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
     function getLiquidateCollateralFactor() public view returns (uint256) {
         return
             uint256(
-                comet.getAssetInfoByAddress(asset).liquidateCollateralFactor
+                comet
+                    .getAssetInfoByAddress(address(asset))
+                    .liquidateCollateralFactor
             );
     }
 
@@ -910,7 +916,7 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
         unchecked {
             return
                 (_toUsd(balanceOfDebt(), baseToken) * 1e18) /
-                _toUsd(balanceOfCollateral(), asset);
+                _toUsd(balanceOfCollateral(), address(asset));
         }
     }
 
@@ -954,7 +960,7 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
      */
     function _claimRewards() internal {
         rewardsContract.claim(address(comet), address(this), true);
-        /// Pull rewards from depositor even if not incentivised to accrue the account
+        /// Pull rewards from depositor even if not incentivized to accrue the account
         depositor.claimRewards();
     }
 
@@ -971,7 +977,7 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
         if (baseNeeded > 0) {
             rewardTokenBalance = ERC20(rewardToken).balanceOf(address(this));
             /// We estimate how much we will need in order to get the amount of base
-            /// Accounts for slippage and diff from oracle price, just to assure no horrible sandwhich
+            /// Accounts for slippage and diff from oracle price, just to assure no horrible sandwich
             uint256 maxRewardToken = (_fromUsd(
                 _toUsd(baseNeeded, baseToken),
                 rewardToken
@@ -993,9 +999,9 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
         rewardTokenBalance = ERC20(rewardToken).balanceOf(address(this));
         _swapFrom(
             rewardToken,
-            asset,
+            address(asset),
             rewardTokenBalance,
-            _getAmountOut(rewardTokenBalance, rewardToken, asset)
+            _getAmountOut(rewardTokenBalance, rewardToken, address(asset))
         );
     }
 
@@ -1013,15 +1019,20 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
         /// Check if our debt balance is still greater than our base token balance
         if (baseStillOwed > 0) {
             /// Need to account for both slippage and diff in the oracle price.
-            /// Should be only swapping very small amounts so its just to make sure there is no massive sandwhich
+            /// Should be only swapping very small amounts so its just to make sure there is no massive sandwich
             uint256 maxAssetBalance = (_fromUsd(
                 _toUsd(baseStillOwed, baseToken),
-                asset
+                address(asset)
             ) * (MAX_BPS + slippage)) / MAX_BPS;
             /// Under 10 can cause rounding errors from token conversions, no need to swap that small amount
             if (maxAssetBalance <= 10) return;
 
-            _swapFrom(asset, baseToken, baseStillOwed, maxAssetBalance);
+            _swapFrom(
+                address(asset),
+                baseToken,
+                baseStillOwed,
+                maxAssetBalance
+            );
         }
     }
 
@@ -1060,7 +1071,7 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
      * This should attempt to free `_amount`, noting that `_amount` may
      * be more than is currently deployed.
      *
-     * NOTE: This will not realize any profits or losses. A seperate
+     * NOTE: This will not realize any profits or losses. A separate
      * {report} will be needed in order to record any profit/loss. If
      * a report may need to be called after a shutdown it is important
      * to check if the strategy is shutdown during {_harvestAndReport}
@@ -1080,9 +1091,9 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
             );
         }
         // Repay everything we can.
-        _repayTokenDebt();
+        _repayTokenDebt(); // TODO: function that just withdraws and repays debt.
 
         // Withdraw all that makes sense.
-        _withdraw(asset, _maxWithdrawal());
+        _withdraw(address(asset), _maxWithdrawal());
     }
 }

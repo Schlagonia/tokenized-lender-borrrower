@@ -22,7 +22,7 @@ interface IStrategyInterface is IBaseHealthCheck, IUniswapV3Swapper {
     function initializeCompV3LenderBorrower(
         address _comet,
         uint24 _ethToAssetFee,
-        address _depositer
+        address _depositor
     ) external;
 
     function balanceOfAsset() external view returns (uint256);
