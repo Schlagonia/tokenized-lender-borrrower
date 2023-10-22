@@ -61,7 +61,7 @@ contract Depositor {
     }
 
     function checkManagement() internal view {
-        require(msg.sender == strategy.management(), "!management");
+        require(strategy.isManagement(msg.sender), "!management");
     }
 
     function checkStrategy() internal view {
@@ -217,8 +217,8 @@ contract Depositor {
     /**
      * @notice Claims accrued reward tokens from the Compound market
      */
-    function claimRewards() external onlyStrategy {
-        rewardsContract.claim(address(comet), address(this), true);
+    function claimRewards(bool _accrue) external onlyStrategy {
+        rewardsContract.claim(address(comet), address(this), _accrue);
 
         uint256 rewardTokenBalance = ERC20(rewardToken).balanceOf(
             address(this)

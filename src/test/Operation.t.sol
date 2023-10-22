@@ -3,6 +3,7 @@ pragma solidity ^0.8.18;
 
 import "forge-std/console.sol";
 import {Setup, IStrategyInterface} from "./utils/Setup.sol";
+import {Comet} from "../interfaces/Compound/V3/CompoundV3.sol";
 
 contract OperationTest is Setup {
     function setUp() public override {
@@ -29,6 +30,12 @@ contract OperationTest is Setup {
 
         checkStrategyTotals(strategy, _amount, _amount, 0);
         assertRelApproxEq(strategy.getCurrentLTV(), targetLTV, 1000);
+        assertEq(strategy.balanceOfCollateral(), _amount, "collateral");
+        assertApproxEq(
+            strategy.balanceOfDebt(),
+            strategy.balanceOfDepositor(),
+            2
+        );
 
         // Earn Interest
         skip(1 days);
@@ -101,7 +108,7 @@ contract OperationTest is Setup {
         uint256 targetLTV = (strategy.getLiquidateCollateralFactor() *
             strategy.targetLTVMultiplier()) / MAX_BPS;
 
-        // Set protofol fee to 0 and perf fee to 10%
+        // Set protocol fee to 0 and perf fee to 10%
         setFees(0, 1_000);
 
         // Deposit into strategy
