@@ -3,6 +3,7 @@ pragma solidity ^0.8.18;
 
 import "forge-std/console.sol";
 import {Setup, IStrategyInterface} from "./utils/Setup.sol";
+import {Comet} from "../interfaces/Compound/V3/CompoundV3.sol";
 
 contract OperationTest is Setup {
     function setUp() public override {
@@ -29,7 +30,12 @@ contract OperationTest is Setup {
 
         checkStrategyTotals(strategy, _amount, _amount, 0);
         assertRelApproxEq(strategy.getCurrentLTV(), targetLTV, 1000);
-
+        assertEq(strategy.balanceOfCollateral(), _amount, "collateral");
+        assertApproxEq(
+            strategy.balanceOfDebt(),
+            strategy.balanceOfDepositor(),
+            2
+        );
         // Earn Interest
         skip(1 days);
 
@@ -101,7 +107,7 @@ contract OperationTest is Setup {
         uint256 targetLTV = (strategy.getLiquidateCollateralFactor() *
             strategy.targetLTVMultiplier()) / MAX_BPS;
 
-        // Set protofol fee to 0 and perf fee to 10%
+        // Set protocol fee to 0 and perf fee to 10%
         setFees(0, 1_000);
 
         // Deposit into strategy
@@ -161,32 +167,38 @@ contract OperationTest is Setup {
     function test_tendTrigger(uint256 _amount) public {
         vm.assume(_amount > minFuzzAmount && _amount < maxFuzzAmount);
 
-        assertTrue(!strategy.tendTrigger());
+        (bool trigger, ) = strategy.tendTrigger();
+        assertTrue(!trigger);
 
         // Deposit into strategy
         mintAndDepositIntoStrategy(strategy, user, _amount);
 
-        assertTrue(!strategy.tendTrigger());
+        (trigger, ) = strategy.tendTrigger();
+        assertTrue(!trigger);
 
         // Skip some time
         skip(1 days);
 
-        assertTrue(!strategy.tendTrigger());
+        (trigger, ) = strategy.tendTrigger();
+        assertTrue(!trigger);
 
         vm.prank(keeper);
         strategy.report();
 
-        assertTrue(!strategy.tendTrigger());
+        (trigger, ) = strategy.tendTrigger();
+        assertTrue(!trigger);
 
         // Unlock Profits
         skip(strategy.profitMaxUnlockTime());
 
-        assertTrue(!strategy.tendTrigger());
+        (trigger, ) = strategy.tendTrigger();
+        assertTrue(!trigger);
 
         vm.prank(user);
         strategy.redeem(_amount, user, user);
 
-        assertTrue(!strategy.tendTrigger());
+        (trigger, ) = strategy.tendTrigger();
+        assertTrue(!trigger);
     }
     */
 }

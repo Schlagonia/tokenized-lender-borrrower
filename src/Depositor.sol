@@ -61,11 +61,17 @@ contract Depositor {
     }
 
     function checkManagement() internal view {
-        require(msg.sender == strategy.management(), "!management");
+        require(strategy.isManagement(msg.sender), "!management");
     }
 
     function checkStrategy() internal view {
         require(msg.sender == address(strategy), "!strategy");
+    }
+
+    constructor() {
+        // Just set comet on the original
+        // so it can't be initialized.
+        comet = Comet(address(1));
     }
 
     event Cloned(address indexed clone);
@@ -110,7 +116,7 @@ contract Depositor {
      * @param _comet The address of the Compound market
      */
     function initialize(address _comet) public {
-        require(address(comet) == address(0), "!initiliazd");
+        require(address(comet) == address(0), "!initialized");
         comet = Comet(_comet);
         baseToken = ERC20(comet.baseToken());
 
@@ -156,7 +162,7 @@ contract Depositor {
         address _baseTokenPriceFeed,
         address _rewardTokenPriceFeed
     ) external onlyManagement {
-        ///  Just check the call doesnt revert. We dont care about the amount returned
+        ///  Just check the call doesn't revert. We don't care about the amount returned
         comet.getPrice(_baseTokenPriceFeed);
         comet.getPrice(_rewardTokenPriceFeed);
         baseTokenPriceFeed = _baseTokenPriceFeed;
@@ -211,8 +217,8 @@ contract Depositor {
     /**
      * @notice Claims accrued reward tokens from the Compound market
      */
-    function claimRewards() external onlyStrategy {
-        rewardsContract.claim(address(comet), address(this), true);
+    function claimRewards(bool _accrue) external onlyStrategy {
+        rewardsContract.claim(address(comet), address(this), _accrue);
 
         uint256 rewardTokenBalance = ERC20(rewardToken).balanceOf(
             address(this)
@@ -329,7 +335,7 @@ contract Depositor {
 
     /**
      * @notice Gets reward APR for borrowing with a given amount
-     * @param newAmount The new amount to borroww
+     * @param newAmount The new amount to borrow
      * @return The reward APR in USD as a decimal scaled up by 1e18
      */
     function getRewardAprForBorrowBase(
@@ -354,7 +360,9 @@ contract Depositor {
      * @notice Allows management to manually withdraw funds
      * @param _amount The amount of tokens to withdraw
      */
-    function manualWithdraw(uint256 _amount) external onlyManagement {
+    function manualWithdraw(uint256 _amount) external {
+        require(strategy.isEmergencyAuthorized(msg.sender));
+
         if (_amount != 0) {
             /// Withdraw directly from the comet.
             comet.withdraw(address(baseToken), _amount);

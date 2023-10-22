@@ -8,11 +8,12 @@ import {IStrategyInterface} from "./interfaces/IStrategyInterface.sol";
 
 contract TokenizedCompV3LenderBorrowerFactory {
     /// @notice Address of the contract managing the strategies
-    address public immutable managment;
+    address public management;
     /// @notice Address where performance fees are sent
-    address public immutable rewards;
+    address public rewards;
     /// @notice Address of the keeper bot
-    address public immutable keeper;
+    address public keeper;
+
     /// @notice Address of the original depositor contract used for cloning
     address public immutable originalDepositor;
 
@@ -24,12 +25,12 @@ contract TokenizedCompV3LenderBorrowerFactory {
     event Deployed(address indexed depositor, address indexed strategy);
 
     /**
-     * @param _managment Address of the management contract
+     * @param _management Address of the management contract
      * @param _rewards Address where performance fees will be sent
      * @param _keeper Address of the keeper bot
      */
-    constructor(address _managment, address _rewards, address _keeper) {
-        managment = _managment;
+    constructor(address _management, address _rewards, address _keeper) {
+        management = _management;
         rewards = _rewards;
         keeper = _keeper;
         /// Deploy an original depositor to clone
@@ -76,9 +77,20 @@ contract TokenizedCompV3LenderBorrowerFactory {
         /// Set the addresses.
         strategy.setPerformanceFeeRecipient(rewards);
         strategy.setKeeper(keeper);
-        strategy.setPendingManagement(managment);
+        strategy.setPendingManagement(management);
 
         emit Deployed(depositor, address(strategy));
         return (depositor, address(strategy));
+    }
+
+    function setAddresses(
+        address _management,
+        address _rewards,
+        address _keeper
+    ) external {
+        require(msg.sender == management, "!management");
+        management = _management;
+        rewards = _rewards;
+        keeper = _keeper;
     }
 }
