@@ -43,6 +43,9 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
     /// Mapping of price feeds. Management can customize if needed
     mapping(address => address) public priceFeeds;
 
+    // Mapping of the token to its decimal multiplier for conversions.
+    mapping(address => uint256) public decimals;
+
     /// @notice Target Loan-To-Value (LTV) multiplier.
     /// @dev Represents the ratio up to which we will borrow, relative to the liquidation threshold.
     /// LTV is the debt-to-collateral ratio. Default is set to 80% of the liquidation LTV.
@@ -116,6 +119,11 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
         priceFeeds[address(asset)] = comet
             .getAssetInfoByAddress(address(asset))
             .priceFeed;
+
+        // Save each tokens decimals mapping.
+        decimals[baseToken] = 10 ** ERC20(baseToken).decimals();
+        decimals[address(asset)] = 10 ** asset.decimals();
+        decimals[rewardToken] = 10 ** ERC20(rewardToken).decimals();
     }
 
     /// ----------------- SETTERS -----------------
@@ -741,9 +749,7 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
         if (_amount == 0) return _amount;
         /// usd price is returned as 1e8
         unchecked {
-            return
-                (_amount * _getCompoundPrice(_token)) /
-                (10 ** ERC20(_token).decimals());
+            return (_amount * _getCompoundPrice(_token)) / (decimals[_token]);
         }
     }
 
@@ -760,9 +766,7 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
     ) internal view returns (uint256) {
         if (_amount == 0) return _amount;
         unchecked {
-            return
-                (_amount * (10 ** ERC20(_token).decimals())) /
-                _getCompoundPrice(_token);
+            return (_amount * (decimals[_token])) / _getCompoundPrice(_token);
         }
     }
 

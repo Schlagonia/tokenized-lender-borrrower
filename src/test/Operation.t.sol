@@ -36,7 +36,6 @@ contract OperationTest is Setup {
             strategy.balanceOfDepositor(),
             2
         );
-
         // Earn Interest
         skip(1 days);
 
