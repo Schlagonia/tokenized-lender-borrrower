@@ -21,6 +21,11 @@ import {Depositor} from "./Depositor.sol";
 contract Strategy is BaseHealthCheck, UniswapV3Swapper {
     using SafeERC20 for ERC20;
 
+    struct TokenInfo {
+        address priceFeed;
+        uint96 decimals;
+    }
+
     /// If set to true, the strategy will not try to repay debt by selling rewards or asset.
     bool public leaveDebtBehind;
 
@@ -40,11 +45,8 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
     /// The reward Token (COMP).
     address public immutable rewardToken;
 
-    /// Mapping of price feeds. Management can customize if needed
-    mapping(address => address) public priceFeeds;
-
-    // Mapping of the token to its decimal multiplier for conversions.
-    mapping(address => uint256) internal decimals;
+    /// Mapping from token => struct containing its reused info
+    mapping(address => TokenInfo) public tokenInfo;
 
     /// @notice Target Loan-To-Value (LTV) multiplier.
     /// @dev Represents the ratio up to which we will borrow, relative to the liquidation threshold.
@@ -111,19 +113,20 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
         /// Default to .3% pool for comp/eth and to .05% pool for eth/baseToken
         _setFees(3000, 500, _ethToAssetFee);
 
-        /// Set default price feeds
-        priceFeeds[baseToken] = comet.baseTokenPriceFeed();
-        /// Default to COMP/USD
-        priceFeeds[rewardToken] = 0x2A8758b7257102461BC958279054e372C2b1bDE6;
-        /// Default to given feed for asset
-        priceFeeds[address(asset)] = comet
-            .getAssetInfoByAddress(address(asset))
-            .priceFeed;
+        tokenInfo[baseToken] = TokenInfo({
+            priceFeed: comet.baseTokenPriceFeed(),
+            decimals: uint96(10 ** ERC20(baseToken).decimals())
+        });
 
-        // Save each tokens decimals mapping.
-        decimals[baseToken] = 10 ** ERC20(baseToken).decimals();
-        decimals[address(asset)] = 10 ** asset.decimals();
-        decimals[rewardToken] = 10 ** ERC20(rewardToken).decimals();
+        tokenInfo[address(asset)] = TokenInfo({
+            priceFeed: comet.getAssetInfoByAddress(address(asset)).priceFeed,
+            decimals: uint96(10 ** ERC20(address(asset)).decimals())
+        });
+
+        tokenInfo[rewardToken] = TokenInfo({
+            priceFeed: 0x2A8758b7257102461BC958279054e372C2b1bDE6,
+            decimals: uint96(10 ** ERC20(rewardToken).decimals())
+        });
     }
 
     /// ----------------- SETTERS -----------------
@@ -173,7 +176,7 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
     ) external onlyManagement {
         // just check it doesn't revert
         comet.getPrice(_priceFeed);
-        priceFeeds[_token] = _priceFeed;
+        tokenInfo[_token].priceFeed = _priceFeed;
     }
 
     /**
@@ -753,7 +756,9 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
         if (_amount == 0) return _amount;
         /// usd price is returned as 1e8
         unchecked {
-            return (_amount * _getCompoundPrice(_token)) / (decimals[_token]);
+            return
+                (_amount * _getCompoundPrice(_token)) /
+                (uint256(tokenInfo[_token].decimals));
         }
     }
 
@@ -770,7 +775,9 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
     ) internal view returns (uint256) {
         if (_amount == 0) return _amount;
         unchecked {
-            return (_amount * (decimals[_token])) / _getCompoundPrice(_token);
+            return
+                (_amount * (uint256(tokenInfo[_token].decimals))) /
+                _getCompoundPrice(_token);
         }
     }
 
@@ -897,7 +904,7 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
     function _getPriceFeedAddress(
         address _asset
     ) internal view returns (address priceFeed) {
-        priceFeed = priceFeeds[_asset];
+        priceFeed = tokenInfo[_asset].priceFeed;
         if (priceFeed == address(0)) {
             priceFeed = comet.getAssetInfoByAddress(_asset).priceFeed;
         }
