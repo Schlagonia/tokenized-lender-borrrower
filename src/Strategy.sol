@@ -44,7 +44,7 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
     mapping(address => address) public priceFeeds;
 
     // Mapping of the token to its decimal multiplier for conversions.
-    mapping(address => uint256) public decimals;
+    mapping(address => uint256) internal decimals;
 
     /// @notice Target Loan-To-Value (LTV) multiplier.
     /// @dev Represents the ratio up to which we will borrow, relative to the liquidation threshold.
@@ -365,6 +365,8 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
      * @return . Should return true if tend() should be called by keeper or false if not.
      */
     function _tendTrigger() internal view override returns (bool) {
+        if (TokenizedStrategy.totalAssets() == 0) return false;
+
         if (comet.isSupplyPaused() || comet.isWithdrawPaused()) return false;
 
         /// If we are in danger of being liquidated tend no matter what
@@ -404,6 +406,8 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
 
             /// Convert to BaseToken
             uint256 amountToBorrowBT = _fromUsd(amountToBorrowUsd, baseToken);
+
+            if (amountToBorrowBT == 0) return false;
 
             /// We want to make sure that the reward apr > borrow apr so we don't report a loss
             /// Borrowing will cause the borrow apr to go up and the rewards apr to go down
