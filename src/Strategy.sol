@@ -739,7 +739,7 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
     }
 
     /**
-    * @dev Accrue both the strategy and the depositor.
+     * @dev Accrue both the strategy and the depositor.
      */
     function _accrueAccounts() internal {
         comet.accrueAccount(address(this));
