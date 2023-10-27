@@ -292,8 +292,7 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
         returns (uint256 _totalAssets)
     {
         /// Accrue the balances of both contracts for balances.
-        comet.accrueAccount(address(this));
-        comet.accrueAccount(address(depositor));
+        _accrueAccounts();
 
         /// 1. claim rewards, 2. even baseToken deposits and borrows 3. sell remainder of rewards to asset.
         /// This will accrue this account as well as the depositor so all future calls are accurate
@@ -352,8 +351,7 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
         }
 
         /// Accrue account for accurate balances
-        comet.accrueAccount(address(this));
-        comet.accrueAccount(address(depositor));
+        _accrueAccounts();
 
         /// Else we need to either adjust LTV up or down.
         _leveragePosition(
@@ -740,6 +738,14 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
         return targetDebt < currentDebt ? currentDebt - targetDebt : 0;
     }
 
+    /**
+    * @dev Accrue both the strategy and the depositor.
+     */
+    function _accrueAccounts() internal {
+        comet.accrueAccount(address(this));
+        comet.accrueAccount(address(depositor));
+    }
+
     // ----------------- INTERNAL CALCS -----------------
 
     /**
@@ -753,8 +759,7 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
         uint256 _amount,
         address _token
     ) internal view returns (uint256) {
-        if (_amount == 0) return _amount;
-        /// usd price is returned as 1e8
+        if (_amount == 0) return 0;
         unchecked {
             return
                 (_amount * _getCompoundPrice(_token)) /
@@ -773,7 +778,7 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
         uint256 _amount,
         address _token
     ) internal view returns (uint256) {
-        if (_amount == 0) return _amount;
+        if (_amount == 0) return 0;
         unchecked {
             return
                 (_amount * (uint256(tokenInfo[_token].decimals))) /
@@ -850,19 +855,6 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
         if (owedInBase != 0) {
             owed = _fromUsd(_toUsd(owedInBase, baseToken), address(asset));
         }
-    }
-
-    /**
-     * @notice Estimates accrued rewards in asset terms
-     * @return Estimated rewards in asset value
-     */
-    function rewardsInAsset() public view returns (uint256) {
-        /// Under report by 10% for safety
-        return
-            (_fromUsd(
-                _toUsd(depositor.getRewardsOwed(), rewardToken),
-                address(asset)
-            ) * 9_000) / MAX_BPS;
     }
 
     /**
