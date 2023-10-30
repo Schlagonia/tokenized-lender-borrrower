@@ -292,7 +292,8 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
         returns (uint256 _totalAssets)
     {
         /// Accrue the balances of both contracts for balances.
-        _accrueAccounts();
+        comet.accrueAccount(address(this));
+        comet.accrueAccount(address(depositor));
 
         /// 1. claim rewards, 2. even baseToken deposits and borrows 3. sell remainder of rewards to asset.
         /// This will accrue this account as well as the depositor so all future calls are accurate
@@ -309,9 +310,6 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
             balanceOfAsset() +
             balanceOfCollateral() -
             _baseTokenOwedInAsset();
-
-        /// Health check the amount to report.
-        _executeHealthCheck(_totalAssets);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -349,9 +347,6 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
             /// Return since we don't asset to do anything else
             return;
         }
-
-        /// Accrue account for accurate balances
-        _accrueAccounts();
 
         /// Else we need to either adjust LTV up or down.
         _leveragePosition(
@@ -592,9 +587,6 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
         /// Cache balance for withdraw checks
         uint256 balance = balanceOfAsset();
 
-        /// Accrue account for accurate balances
-        comet.accrueAccount(address(this));
-
         /// We first repay whatever we need to repay to keep healthy ratios
         _withdrawFromDepositor(_calculateAmountToRepay(_needed));
 
@@ -642,8 +634,8 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
         _amountBT = balancePrior >= _amountBT ? 0 : _amountBT - balancePrior;
         if (_amountBT == 0) return;
 
-        /// Make sure we have enough balance. This accrues the account first.
-        _amountBT = Math.min(_amountBT, depositor.accruedCometBalance());
+        /// Make sure we have enough balance.
+        _amountBT = Math.min(_amountBT, depositor.cometBalance());
         /// need to check liquidity of the comet
         _amountBT = Math.min(
             _amountBT,
@@ -736,14 +728,6 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
         uint256 currentDebt = balanceOfDebt();
         /// Repay only if our target debt is lower than our current debt
         return targetDebt < currentDebt ? currentDebt - targetDebt : 0;
-    }
-
-    /**
-     * @dev Accrue both the strategy and the depositor.
-     */
-    function _accrueAccounts() internal {
-        comet.accrueAccount(address(this));
-        comet.accrueAccount(address(depositor));
     }
 
     // ----------------- INTERNAL CALCS -----------------
@@ -1096,9 +1080,7 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
      */
     function _emergencyWithdraw(uint256 _amount) internal override {
         if (_amount > 0) {
-            depositor.withdraw(
-                Math.min(_amount, depositor.accruedCometBalance())
-            );
+            depositor.withdraw(Math.min(_amount, depositor.cometBalance()));
         }
         // Repay everything we can.
         _repayTokenDebt();
