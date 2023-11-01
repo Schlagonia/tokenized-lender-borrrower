@@ -14,6 +14,8 @@ import {BaseHealthCheck, ERC20} from "@periphery/HealthCheck/BaseHealthCheck.sol
 
 import {Depositor} from "./Depositor.sol";
 
+import "forge-std/console.sol";
+
 /**
  * @title CompV3LenderBorrower
  * @notice A Yearn V3 lender borrower strategy for Compound V3.
@@ -153,12 +155,14 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
     ) external onlyManagement {
         require(
             _warningLTVMultiplier <= 9_000 &&
-                _targetLTVMultiplier < _warningLTVMultiplier
+                _targetLTVMultiplier < _warningLTVMultiplier &&
+                _targetLTVMultiplier != 0
         );
         targetLTVMultiplier = _targetLTVMultiplier;
         warningLTVMultiplier = _warningLTVMultiplier;
         minAmountToSell = _minToSell;
         require(_slippage < MAX_BPS, "slippage");
+        slippage = _slippage;
         leaveDebtBehind = _leaveDebtBehind;
         maxGasPriceToTend = _maxGasPriceToTend;
     }
@@ -474,8 +478,8 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
     function availableWithdrawLimit(
         address /*_owner*/
     ) public view override returns (uint256) {
-        /// Default liquidity is the balance of collateral
-        uint256 liquidity = balanceOfCollateral();
+        /// Default liquidity is the balance of collateral + 1 for rounding.
+        uint256 liquidity = balanceOfCollateral() + 1;
 
         /// If we can't withdraw or supply, set liquidity = 0.
         if (comet.isSupplyPaused() || comet.isWithdrawPaused()) {
@@ -695,6 +699,7 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
             (debtInUsd * 1e18) / _getTargetLTV(),
             address(asset)
         );
+
         /// We need more collateral so we cant withdraw anything
         if (neededCollateral > collateral) {
             return 0;
@@ -1085,6 +1090,11 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
         // Repay everything we can.
         _repayTokenDebt();
 
+        // Withdraw all that makes sense.
+        _withdraw(address(asset), _maxWithdrawal());
+    }
+
+    function manualWithdraw() external onlyEmergencyAuthorized {
         // Withdraw all that makes sense.
         _withdraw(address(asset), _maxWithdrawal());
     }

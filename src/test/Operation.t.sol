@@ -2,8 +2,7 @@
 pragma solidity ^0.8.18;
 
 import "forge-std/console.sol";
-import {Setup, IStrategyInterface} from "./utils/Setup.sol";
-import {Comet} from "../interfaces/Compound/V3/CompoundV3.sol";
+import {Setup, IStrategyInterface, ERC20, Comet} from "./utils/Setup.sol";
 
 contract OperationTest is Setup {
     function setUp() public override {
@@ -163,10 +162,58 @@ contract OperationTest is Setup {
             "!perf fee out"
         );
     }
-    /** 
+
+    function test_leaveDebtBehind_realizesLoss(uint256 _amount) public {
+        vm.assume(_amount > minFuzzAmount && _amount < maxFuzzAmount);
+
+        vm.startPrank(management);
+        strategy.setStrategyParams(
+            strategy.targetLTVMultiplier(),
+            strategy.warningLTVMultiplier(),
+            strategy.minAmountToSell(),
+            strategy.slippage(),
+            true,
+            strategy.maxGasPriceToTend()
+        );
+        vm.stopPrank();
+
+        uint256 targetLTV = (strategy.getLiquidateCollateralFactor() *
+            strategy.targetLTVMultiplier()) / MAX_BPS;
+        // Deposit into strategy
+        mintAndDepositIntoStrategy(strategy, user, _amount);
+
+        checkStrategyTotals(strategy, _amount, _amount, 0);
+        assertRelApproxEq(strategy.getCurrentLTV(), targetLTV, 1000);
+        assertEq(strategy.balanceOfCollateral(), _amount, "collateral");
+        assertApproxEq(
+            strategy.balanceOfDebt(),
+            strategy.balanceOfDepositor(),
+            2
+        );
+        // Earn unrealized profit.
+        skip(1 days);
+
+        uint256 balanceBefore = asset.balanceOf(user);
+
+        // Redeem all funds. Default maxLoss == 10_000.
+        vm.prank(user);
+        strategy.redeem(_amount, user, user);
+
+        // We should not have got the full amount out.
+        assertLt(
+            asset.balanceOf(user),
+            balanceBefore + _amount,
+            "!final balance"
+        );
+    }
+
     function test_tendTrigger(uint256 _amount) public {
         vm.assume(_amount > minFuzzAmount && _amount < maxFuzzAmount);
 
+        uint256 targetLTV = (strategy.getLiquidateCollateralFactor() *
+            strategy.targetLTVMultiplier()) / MAX_BPS;
+
+        // No assets should be false.
         (bool trigger, ) = strategy.tendTrigger();
         assertTrue(!trigger);
 
@@ -182,11 +229,49 @@ contract OperationTest is Setup {
         (trigger, ) = strategy.tendTrigger();
         assertTrue(!trigger);
 
+        // Borrow too much.
+        uint256 toBorrow = (strategy.balanceOfCollateral() *
+            ((strategy.getLiquidateCollateralFactor() *
+                strategy.warningLTVMultiplier()) / MAX_BPS)) / 1e18;
+
+        toBorrow = _fromUsd(_toUsd(toBorrow, address(asset)), baseToken);
+
+        vm.startPrank(address(strategy));
+        Comet(comet).withdraw(
+            address(baseToken),
+            toBorrow - strategy.balanceOfDebt() + 100000
+        );
+        vm.stopPrank();
+
+        (trigger, ) = strategy.tendTrigger();
+        assertTrue(trigger, "warning ltv");
+
+        vm.prank(keeper);
+        strategy.tend();
+
+        (trigger, ) = strategy.tendTrigger();
+        assertTrue(!trigger, "post tend");
+
         vm.prank(keeper);
         strategy.report();
 
+        // Lower LTV
+        uint256 borrowed = strategy.balanceOfDebt();
+        airdrop(ERC20(baseToken), address(strategy), borrowed / 2);
+
+        vm.prank(management);
+        strategy.manualRepayDebt();
+
+        assertLt(strategy.getCurrentLTV(), targetLTV);
+
         (trigger, ) = strategy.tendTrigger();
-        assertTrue(!trigger);
+        assertTrue(trigger);
+
+        vm.prank(keeper);
+        strategy.tend();
+
+        (trigger, ) = strategy.tendTrigger();
+        assertTrue(!trigger, "post tend");
 
         // Unlock Profits
         skip(strategy.profitMaxUnlockTime());
@@ -200,5 +285,4 @@ contract OperationTest is Setup {
         (trigger, ) = strategy.tendTrigger();
         assertTrue(!trigger);
     }
-    */
 }

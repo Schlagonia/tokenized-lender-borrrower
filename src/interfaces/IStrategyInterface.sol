@@ -5,9 +5,20 @@ import {IBaseHealthCheck} from "@periphery/HealthCheck/IBaseHealthCheck.sol";
 import {IUniswapV3Swapper} from "@periphery/swappers/interfaces/IUniswapV3Swapper.sol";
 
 interface IStrategyInterface is IBaseHealthCheck, IUniswapV3Swapper {
+    struct TokenInfo {
+        address priceFeed;
+        uint96 decimals;
+    }
+
+    function tokenInfo(address) external view returns (TokenInfo memory);
+
     function baseToken() external view returns (address);
 
-    function targetLTVMultiplier() external view returns (uint256);
+    function targetLTVMultiplier() external view returns (uint16);
+
+    function warningLTVMultiplier() external view returns (uint16);
+
+    function slippage() external view returns (uint256);
 
     function depositor() external view returns (address);
 
@@ -15,6 +26,7 @@ interface IStrategyInterface is IBaseHealthCheck, IUniswapV3Swapper {
         uint16 _targetLTVMultiplier,
         uint16 _warningLTVMultiplier,
         uint256 _minToSell,
+        uint256 _slippage,
         bool _leaveDebtBehind,
         uint256 _maxGasPriceToTend
     ) external;
@@ -24,6 +36,10 @@ interface IStrategyInterface is IBaseHealthCheck, IUniswapV3Swapper {
         uint24 _ethToAssetFee,
         address _depositor
     ) external;
+
+    function leaveDebtBehind() external view returns (bool);
+
+    function maxGasPriceToTend() external view returns (uint256);
 
     function balanceOfAsset() external view returns (uint256);
 
@@ -48,4 +64,8 @@ interface IStrategyInterface is IBaseHealthCheck, IUniswapV3Swapper {
     function getCurrentLTV() external view returns (uint256);
 
     function claimRewards() external;
+
+    function manualRepayDebt() external;
+
+    function manualWithdraw() external;
 }
