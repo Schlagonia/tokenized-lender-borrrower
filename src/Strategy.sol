@@ -491,15 +491,13 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
         ) {
             /// Adjust liquidity based on withdrawing the full amount of debt.
             unchecked {
-                liquidity =
-                    ((_fromUsd(
-                        _toUsd(
-                            ERC20(baseToken).balanceOf(address(comet)),
-                            baseToken
-                        ),
-                        address(asset)
-                    ) * MAX_BPS) / _getTargetLTV()) -
-                    1; // Minus 1 for rounding.
+                liquidity = ((_fromUsd(
+                    _toUsd(
+                        ERC20(baseToken).balanceOf(address(comet)),
+                        baseToken
+                    ),
+                    address(asset)
+                ) * 1e18) / _getTargetLTV());
             }
         }
 

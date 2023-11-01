@@ -207,6 +207,49 @@ contract OperationTest is Setup {
         );
     }
 
+    function test_availableWithdrawLimit(uint256 _amount) public {
+        vm.assume(_amount > minFuzzAmount && _amount < maxFuzzAmount);
+
+        uint256 targetLTV = (strategy.getLiquidateCollateralFactor() *
+            strategy.targetLTVMultiplier()) / MAX_BPS;
+        // Deposit into strategy
+        mintAndDepositIntoStrategy(strategy, user, _amount);
+
+        checkStrategyTotals(strategy, _amount, _amount, 0);
+        assertRelApproxEq(strategy.getCurrentLTV(), targetLTV, 1000);
+        assertEq(strategy.balanceOfCollateral(), _amount, "collateral");
+        assertApproxEq(
+            strategy.balanceOfDebt(),
+            strategy.balanceOfDepositor(),
+            2
+        );
+        // Earn unrealized profit.
+        skip(1 days);
+
+        uint256 baseBalance = ERC20(baseToken).balanceOf(comet);
+        uint256 debt = strategy.balanceOfDebt();
+
+        // Simulate only enough liquidity to repay half our debt
+        vm.prank(comet);
+        ERC20(baseToken).transfer(management, baseBalance - (debt / 2));
+
+        assertRelApproxEq(strategy.maxWithdraw(user), _amount / 2, 1000);
+        assertRelApproxEq(strategy.maxRedeem(user), _amount / 2, 1000);
+
+        uint256 balanceBefore = asset.balanceOf(user);
+
+        // Redeem all funds. Default maxLoss == 10_000.
+        vm.prank(user);
+        strategy.redeem(_amount / 2, user, user);
+
+        // We should not have got the full amount out.
+        assertLt(
+            asset.balanceOf(user),
+            balanceBefore + (_amount / 2),
+            "!final balance"
+        );
+    }
+
     function test_tendTrigger(uint256 _amount) public {
         vm.assume(_amount > minFuzzAmount && _amount < maxFuzzAmount);
 
