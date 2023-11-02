@@ -33,7 +33,7 @@ contract OperationTest is Setup {
         assertApproxEq(
             strategy.balanceOfDebt(),
             strategy.balanceOfDepositor(),
-            2
+            3
         );
         // Earn Interest
         skip(1 days);

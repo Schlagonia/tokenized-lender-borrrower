@@ -63,7 +63,7 @@ interface IStrategyInterface is IBaseHealthCheck, IUniswapV3Swapper {
 
     function getCurrentLTV() external view returns (uint256);
 
-    function claimRewards() external;
+    function claimAndSellRewards() external;
 
     function manualRepayDebt() external;
 

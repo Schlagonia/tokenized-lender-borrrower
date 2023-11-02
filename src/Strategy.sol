@@ -14,8 +14,6 @@ import {BaseHealthCheck, ERC20} from "@periphery/HealthCheck/BaseHealthCheck.sol
 
 import {Depositor} from "./Depositor.sol";
 
-import "forge-std/console.sol";
-
 /**
  * @title CompV3LenderBorrower
  * @notice A Yearn V3 lender borrower strategy for Compound V3.
@@ -295,13 +293,9 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
         override
         returns (uint256 _totalAssets)
     {
-        /// Accrue the balances of both contracts for balances.
-        comet.accrueAccount(address(this));
-        comet.accrueAccount(address(depositor));
-
         /// 1. claim rewards, 2. even baseToken deposits and borrows 3. sell remainder of rewards to asset.
-        /// This will accrue this account as well as the depositor so all future calls are accurate
-        _claimAndSellRewards();
+        /// This will also accrue both accounts.
+        _claimAndSellRewards(true);
 
         /// Leverage all the asset we have or up to the supply cap.
         /// We want check our leverage even if balance of asset is 0.
@@ -945,13 +939,6 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
     /// ----------------- HARVEST / TOKEN CONVERSIONS -----------------
 
     /**
-     * @notice Claims earned reward tokens
-     */
-    function claimRewards() external onlyKeepers {
-        _claimRewards(true);
-    }
-
-    /**
      * @notice Claims reward tokens from Comet and depositor
      */
     function _claimRewards(bool _accrue) internal {
@@ -964,9 +951,9 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
      * @notice Claims and sells available reward tokens
      * @dev Handles claiming, selling rewards for base tokens if needed, and selling remaining rewards for asset
      */
-    function _claimAndSellRewards() internal {
+    function _claimAndSellRewards(bool _accrue) internal {
         // Claim rewards should have already been accrued.
-        _claimRewards(false);
+        _claimRewards(_accrue);
 
         uint256 rewardTokenBalance;
         uint256 baseNeeded = baseTokenOwedBalance();
@@ -1010,7 +997,7 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
      */
     function _buyBaseToken() internal {
         /// Try to obtain the required amount from rewards tokens before swapping assets and reporting losses.
-        _claimAndSellRewards();
+        _claimAndSellRewards(false);
 
         uint256 baseStillOwed = baseTokenOwedBalance();
         /// Check if our debt balance is still greater than our base token balance
@@ -1090,6 +1077,11 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
 
         // Withdraw all that makes sense.
         _withdraw(address(asset), _maxWithdrawal());
+    }
+
+    // Manually Sell rewards
+    function claimAndSellRewards() external onlyEmergencyAuthorized {
+        _claimAndSellRewards(true);
     }
 
     function manualWithdraw() external onlyEmergencyAuthorized {

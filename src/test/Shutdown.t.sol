@@ -116,6 +116,13 @@ contract ShutdownTest is Setup {
 
         vm.expectRevert("!emergency authorized");
         vm.prank(user);
+        strategy.claimAndSellRewards();
+
+        vm.prank(management);
+        strategy.claimAndSellRewards();
+
+        vm.expectRevert("!emergency authorized");
+        vm.prank(user);
         strategy.manualRepayDebt();
 
         vm.prank(management);
@@ -124,7 +131,7 @@ contract ShutdownTest is Setup {
         assertEq(ERC20(strategy.baseToken()).balanceOf(address(depositor)), 0);
         assertEq(depositor.cometBalance(), 0);
         assertEq(ERC20(strategy.baseToken()).balanceOf(address(strategy)), 0);
-        assertLt(strategy.getCurrentLTV(), ltv);
+        assertEq(strategy.getCurrentLTV(), 0);
 
         checkStrategyTotals(strategy, _amount, _amount, 0);
 
@@ -141,7 +148,7 @@ contract ShutdownTest is Setup {
         vm.stopPrank();
 
         vm.prank(management);
-        strategy.report();
+        strategy.tend();
 
         // Make sure we can still withdraw the full amount
         uint256 balanceBefore = asset.balanceOf(user);
