@@ -14,7 +14,7 @@ import {IEvents} from "@tokenized-strategy/interfaces/IEvents.sol";
 
 import {TokenizedCompV3LenderBorrowerFactory} from "../../TokenizedCompV3LenderBorrowerFactory.sol";
 import {Depositor} from "../../Depositor.sol";
-import {Strategy} from "../../Strategy.sol";
+import {Strategy, Comet} from "../../Strategy.sol";
 
 interface IFactory {
     function governance() external view returns (address);
@@ -25,7 +25,7 @@ interface IFactory {
 }
 
 contract Setup is ExtendedTest, IEvents {
-    // Contract instancees that we will use repeatedly.
+    // Contract instance's that we will use repeatedly.
     ERC20 public asset;
     IStrategyInterface public strategy;
     TokenizedCompV3LenderBorrowerFactory public strategyFactory;
@@ -34,6 +34,7 @@ contract Setup is ExtendedTest, IEvents {
     mapping(string => address) public tokenAddrs;
     mapping(string => address) public comets;
 
+    address public baseToken;
     address public comet;
     uint24 public ethToAssetFee;
 
@@ -71,6 +72,8 @@ contract Setup is ExtendedTest, IEvents {
         // Deploy strategy and set variables
         (depositor, strategy) = setUpStrategy();
 
+        baseToken = strategy.baseToken();
+
         factory = strategy.FACTORY();
 
         // label all the used addresses for traces
@@ -91,7 +94,7 @@ contract Setup is ExtendedTest, IEvents {
             keeper
         );
 
-        (address _depoister, address strategy_) = strategyFactory
+        (address _depositor, address strategy_) = strategyFactory
             .newCompV3LenderBorrower(
                 address(asset),
                 "Test Lender Borrower",
@@ -107,7 +110,7 @@ contract Setup is ExtendedTest, IEvents {
         vm.prank(management);
         _strategy.setProfitMaxUnlockTime(1 days);
 
-        return (Depositor(_depoister), _strategy);
+        return (Depositor(_depositor), _strategy);
     }
 
     function depositIntoStrategy(
@@ -173,5 +176,35 @@ contract Setup is ExtendedTest, IEvents {
         tokenAddrs["USDC"] = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
         comets["WETH"] = 0xA17581A9E3356d9A858b789D68B4d866e593aE94;
         comets["USDC"] = 0xF25212E676D1F7F89Cd72fFEe66158f541246445;
+    }
+
+    function _toUsd(
+        uint256 _amount,
+        address _token
+    ) internal view returns (uint256) {
+        if (_amount == 0) return 0;
+        unchecked {
+            return
+                (_amount * _getCompoundPrice(_token)) /
+                (uint256(strategy.tokenInfo(_token).decimals));
+        }
+    }
+
+    function _fromUsd(
+        uint256 _amount,
+        address _token
+    ) internal view returns (uint256) {
+        if (_amount == 0) return 0;
+        unchecked {
+            return
+                (_amount * (uint256(strategy.tokenInfo(_token).decimals))) /
+                _getCompoundPrice(_token);
+        }
+    }
+
+    function _getCompoundPrice(
+        address _asset
+    ) internal view returns (uint256 price) {
+        price = Comet(comet).getPrice(strategy.tokenInfo(_asset).priceFeed);
     }
 }

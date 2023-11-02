@@ -178,15 +178,6 @@ contract Depositor {
     }
 
     /**
-     * @notice Non-view function to accrue account for the most accurate accounting
-     * @return The Compound market balance including accrued interest
-     */
-    function accruedCometBalance() public returns (uint256) {
-        comet.accrueAccount(address(this));
-        return comet.balanceOf(address(this));
-    }
-
-    /**
      * @notice Withdraws tokens from the Compound market
      * @param _amount The amount of tokens to withdraw
      */
