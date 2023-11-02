@@ -61,6 +61,65 @@ contract OperationTest is Setup {
         );
     }
 
+    function test_healthcheck(uint256 _amount) public {
+        vm.assume(_amount > minFuzzAmount && _amount < maxFuzzAmount);
+
+        uint256 targetLTV = (strategy.getLiquidateCollateralFactor() *
+            strategy.targetLTVMultiplier()) / MAX_BPS;
+        // Deposit into strategy
+        mintAndDepositIntoStrategy(strategy, user, _amount);
+
+        checkStrategyTotals(strategy, _amount, _amount, 0);
+        assertRelApproxEq(strategy.getCurrentLTV(), targetLTV, 1000);
+        assertEq(strategy.balanceOfCollateral(), _amount, "collateral");
+        assertApproxEq(
+            strategy.balanceOfDebt(),
+            strategy.balanceOfDepositor(),
+            3
+        );
+        // Earn Interest
+        skip(1 days);
+
+        // Simulate loss of base token
+        vm.startPrank(address(depositor));
+        Comet(comet).withdraw(baseToken, strategy.balanceOfDebt() / 2);
+        ERC20(baseToken).transfer(
+            management,
+            ERC20(baseToken).balanceOf(address(depositor))
+        );
+        vm.stopPrank();
+
+        // Shouldn't aut record loss
+        vm.expectRevert("healthCheck");
+        vm.prank(keeper);
+        strategy.report();
+
+        vm.prank(management);
+        strategy.setDoHealthCheck(false);
+
+        vm.prank(keeper);
+        (uint256 profit, uint256 loss) = strategy.report();
+
+        // Check return Values
+        assertEq(profit, 0, "!profit");
+        assertGt(loss, 0, "!loss");
+
+        // Make sure we got back to our Target LTV.
+        assertRelApproxEq(strategy.getCurrentLTV(), targetLTV, 1000);
+
+        uint256 balanceBefore = asset.balanceOf(user);
+
+        // Withdraw all funds
+        vm.prank(user);
+        strategy.redeem(_amount, user, user);
+
+        assertLt(
+            asset.balanceOf(user),
+            balanceBefore + _amount,
+            "!final balance"
+        );
+    }
+
     function test_profitableReport(uint256 _amount) public {
         vm.assume(_amount > minFuzzAmount && _amount < maxFuzzAmount);
 

@@ -1011,12 +1011,7 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
             /// Under 10 can cause rounding errors from token conversions, no need to swap that small amount
             if (maxAssetBalance <= 10) return;
 
-            _swapFrom(
-                address(asset),
-                baseToken,
-                baseStillOwed,
-                maxAssetBalance
-            );
+            _swapTo(address(asset), baseToken, baseStillOwed, maxAssetBalance);
         }
     }
 

@@ -25,7 +25,7 @@ interface IFactory {
 }
 
 contract Setup is ExtendedTest, IEvents {
-    // Contract instancees that we will use repeatedly.
+    // Contract instance's that we will use repeatedly.
     ERC20 public asset;
     IStrategyInterface public strategy;
     TokenizedCompV3LenderBorrowerFactory public strategyFactory;
@@ -94,7 +94,7 @@ contract Setup is ExtendedTest, IEvents {
             keeper
         );
 
-        (address _depoister, address strategy_) = strategyFactory
+        (address _depositor, address strategy_) = strategyFactory
             .newCompV3LenderBorrower(
                 address(asset),
                 "Test Lender Borrower",
@@ -110,7 +110,7 @@ contract Setup is ExtendedTest, IEvents {
         vm.prank(management);
         _strategy.setProfitMaxUnlockTime(1 days);
 
-        return (Depositor(_depoister), _strategy);
+        return (Depositor(_depositor), _strategy);
     }
 
     function depositIntoStrategy(
