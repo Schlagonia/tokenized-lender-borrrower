@@ -61,6 +61,95 @@ contract OperationTest is Setup {
         );
     }
 
+    function test_partialWithdraw_highLTV(uint256 _amount) public {
+        vm.assume(_amount > minFuzzAmount && _amount < maxFuzzAmount);
+
+        uint256 targetLTV = (strategy.getLiquidateCollateralFactor() *
+            strategy.targetLTVMultiplier()) / MAX_BPS;
+        // Deposit into strategy
+        mintAndDepositIntoStrategy(strategy, user, _amount);
+
+        checkStrategyTotals(strategy, _amount, _amount, 0);
+        assertRelApproxEq(strategy.getCurrentLTV(), targetLTV, 1000);
+        assertEq(strategy.balanceOfCollateral(), _amount, "collateral");
+        assertApproxEq(
+            strategy.balanceOfDebt(),
+            strategy.balanceOfDepositor(),
+            3
+        );
+        // Earn Interest
+        skip(1 days);
+
+        // Increase LTV
+        uint256 toBorrow = (strategy.balanceOfCollateral() *
+            ((strategy.getLiquidateCollateralFactor() *
+                (strategy.targetLTVMultiplier() + 500)) / MAX_BPS)) / 1e18;
+
+        toBorrow = _fromUsd(_toUsd(toBorrow, address(asset)), baseToken);
+
+        vm.startPrank(address(strategy));
+        Comet(comet).withdraw(
+            address(baseToken),
+            toBorrow - strategy.balanceOfDebt()
+        );
+        vm.stopPrank();
+
+        assertGt(strategy.getCurrentLTV(), targetLTV);
+
+        uint256 balanceBefore = asset.balanceOf(user);
+
+        // Withdraw all funds
+        vm.prank(user);
+        strategy.redeem(_amount / 2, user, user, 0);
+
+        assertGe(
+            asset.balanceOf(user),
+            balanceBefore + (_amount / 2),
+            "!final balance"
+        );
+    }
+
+    function test_partialWithdraw_lowerLTV(uint256 _amount) public {
+        vm.assume(_amount > minFuzzAmount && _amount < maxFuzzAmount);
+
+        uint256 targetLTV = (strategy.getLiquidateCollateralFactor() *
+            strategy.targetLTVMultiplier()) / MAX_BPS;
+        // Deposit into strategy
+        mintAndDepositIntoStrategy(strategy, user, _amount);
+
+        checkStrategyTotals(strategy, _amount, _amount, 0);
+        assertRelApproxEq(strategy.getCurrentLTV(), targetLTV, 1000);
+        assertEq(strategy.balanceOfCollateral(), _amount, "collateral");
+        assertApproxEq(
+            strategy.balanceOfDebt(),
+            strategy.balanceOfDepositor(),
+            3
+        );
+        // Earn Interest
+        skip(1 days);
+
+        // lower LTV
+        uint256 borrowed = strategy.balanceOfDebt();
+        airdrop(ERC20(baseToken), address(strategy), borrowed / 4);
+
+        vm.prank(management);
+        strategy.manualRepayDebt();
+
+        assertLt(strategy.getCurrentLTV(), targetLTV);
+
+        uint256 balanceBefore = asset.balanceOf(user);
+
+        // Withdraw all funds
+        vm.prank(user);
+        strategy.redeem(_amount / 2, user, user, 0);
+
+        assertGe(
+            asset.balanceOf(user),
+            balanceBefore + (_amount / 2),
+            "!final balance"
+        );
+    }
+
     function test_healthcheck(uint256 _amount) public {
         vm.assume(_amount > minFuzzAmount && _amount < maxFuzzAmount);
 
