@@ -336,7 +336,7 @@ contract OperationTest is Setup {
         assertApproxEq(
             strategy.balanceOfDebt(),
             strategy.balanceOfDepositor(),
-            2
+            3
         );
         // Earn unrealized profit.
         skip(1 days);
@@ -369,7 +369,7 @@ contract OperationTest is Setup {
         assertApproxEq(
             strategy.balanceOfDebt(),
             strategy.balanceOfDepositor(),
-            2
+            3
         );
         // Earn unrealized profit.
         skip(1 days);
