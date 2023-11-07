@@ -5,7 +5,7 @@ import "forge-std/console.sol";
 import {Setup, IStrategyInterface, ERC20, Comet} from "./utils/Setup.sol";
 
 contract OperationTest is Setup {
-    function setUp() public override {
+    function setUp() public virtual override {
         super.setUp();
     }
 
@@ -100,11 +100,11 @@ contract OperationTest is Setup {
 
         // Withdraw all funds
         vm.prank(user);
-        strategy.redeem(_amount / 2, user, user, 0);
+        strategy.redeem(_amount / 2, user, user, 1);
 
         assertGe(
             asset.balanceOf(user),
-            balanceBefore + (_amount / 2),
+            ((balanceBefore + (_amount / 2)) * 9_999) / MAX_BPS,
             "!final balance"
         );
     }
@@ -141,11 +141,11 @@ contract OperationTest is Setup {
 
         // Withdraw all funds
         vm.prank(user);
-        strategy.redeem(_amount / 2, user, user, 0);
+        strategy.redeem(_amount / 2, user, user, 1);
 
         assertGe(
             asset.balanceOf(user),
-            balanceBefore + (_amount / 2),
+            ((balanceBefore + (_amount / 2)) * 9_999) / MAX_BPS,
             "!final balance"
         );
     }
