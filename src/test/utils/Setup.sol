@@ -69,6 +69,12 @@ contract Setup is ExtendedTest, IEvents {
         // Set decimals
         decimals = asset.decimals();
 
+        strategyFactory = new TokenizedCompV3LenderBorrowerFactory(
+            management,
+            performanceFeeRecipient,
+            keeper
+        );
+
         // Deploy strategy and set variables
         (depositor, strategy) = setUpStrategy();
 
@@ -88,12 +94,6 @@ contract Setup is ExtendedTest, IEvents {
     }
 
     function setUpStrategy() public returns (Depositor, IStrategyInterface) {
-        strategyFactory = new TokenizedCompV3LenderBorrowerFactory(
-            management,
-            performanceFeeRecipient,
-            keeper
-        );
-
         (address _depositor, address strategy_) = strategyFactory
             .newCompV3LenderBorrower(
                 address(asset),
@@ -169,7 +169,8 @@ contract Setup is ExtendedTest, IEvents {
     function _setTokenAddrs() internal {
         tokenAddrs["WBTC"] = 0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6;
         tokenAddrs["YFI"] = 0x0bc529c00C6401aEF6D220BE8C6Ea1667F6Ad93e;
-        tokenAddrs["WETH"] = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+        tokenAddrs["WMATIC"] = 0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270;
+        tokenAddrs["WETH"] = 0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619;
         tokenAddrs["LINK"] = 0x514910771AF9Ca656af840dff83E8264EcF986CA;
         tokenAddrs["USDT"] = 0xdAC17F958D2ee523a2206206994597C13D831ec7;
         tokenAddrs["DAI"] = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
