@@ -316,6 +316,7 @@ contract OperationTest is Setup {
 
         vm.startPrank(management);
         strategy.setStrategyParams(
+            strategy.depositLimit(),
             strategy.targetLTVMultiplier(),
             strategy.warningLTVMultiplier(),
             strategy.minAmountToSell(),
@@ -396,6 +397,48 @@ contract OperationTest is Setup {
             balanceBefore + (_amount / 2),
             "!final balance"
         );
+    }
+
+    function test_buffer(uint256 _amount) public {
+        vm.assume(_amount > minFuzzAmount && _amount < maxFuzzAmount);
+
+        uint256 toBorrow = (_amount *
+            ((strategy.getLiquidateCollateralFactor() *
+                strategy.targetLTVMultiplier()) / MAX_BPS)) / 1e18;
+
+        assertEq(depositor.buffer(), 100);
+
+        uint256 initialNet = depositor.getNetRewardApr(toBorrow);
+        uint256 initialSupply = depositor.getRewardAprForSupplyBase(toBorrow);
+        uint256 initialBorrow = depositor.getRewardAprForBorrowBase(toBorrow);
+
+        vm.expectRevert("!management");
+        vm.prank(user);
+        depositor.setBuffer(0);
+
+        vm.expectRevert("higher than MAX_BPS");
+        vm.prank(management);
+        depositor.setBuffer(10_001);
+
+        // Decrease buffer
+        vm.prank(management);
+        depositor.setBuffer(0);
+
+        assertEq(depositor.buffer(), 0);
+        // Reward APR should now be higher with less buffer
+        assertGt(depositor.getNetRewardApr(toBorrow), initialNet);
+        assertGt(depositor.getRewardAprForSupplyBase(toBorrow), initialSupply);
+        assertGt(depositor.getRewardAprForBorrowBase(toBorrow), initialBorrow);
+
+        // Increase buffer
+        vm.prank(management);
+        depositor.setBuffer(500);
+
+        assertEq(depositor.buffer(), 500);
+        // Reward APR should now be lower with more buffer
+        assertLt(depositor.getNetRewardApr(toBorrow), initialNet);
+        assertLt(depositor.getRewardAprForSupplyBase(toBorrow), initialSupply);
+        assertLt(depositor.getRewardAprForBorrowBase(toBorrow), initialBorrow);
     }
 
     function test_tendTrigger(uint256 _amount) public {

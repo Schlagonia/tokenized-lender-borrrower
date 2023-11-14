@@ -14,6 +14,8 @@ interface IStrategyInterface is IBaseHealthCheck, IUniswapV3Swapper {
 
     function baseToken() external view returns (address);
 
+    function depositLimit() external view returns (uint256);
+
     function targetLTVMultiplier() external view returns (uint16);
 
     function warningLTVMultiplier() external view returns (uint16);
@@ -23,6 +25,7 @@ interface IStrategyInterface is IBaseHealthCheck, IUniswapV3Swapper {
     function depositor() external view returns (address);
 
     function setStrategyParams(
+        uint256 _depositLimit,
         uint16 _targetLTVMultiplier,
         uint16 _warningLTVMultiplier,
         uint256 _minToSell,

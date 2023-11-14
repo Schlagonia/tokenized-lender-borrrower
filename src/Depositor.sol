@@ -29,6 +29,7 @@ contract Depositor {
     uint64 internal constant DAYS_PER_YEAR = 365;
     uint64 internal constant SECONDS_PER_DAY = 60 * 60 * 24;
     uint64 internal constant SECONDS_PER_YEAR = 365 days;
+    uint256 internal constant MAX_BPS = 10_000;
 
     /// Price feeds for the reward apr calculation, can be updated manually if needed
     address public rewardTokenPriceFeed;
@@ -49,6 +50,9 @@ contract Depositor {
 
     /// The reward Token
     address internal rewardToken;
+
+    // The amount in basis points to lower comp oracle price by.
+    uint256 public buffer;
 
     modifier onlyManagement() {
         checkManagement();
@@ -135,6 +139,9 @@ contract Depositor {
         baseTokenPriceFeed = comet.baseTokenPriceFeed();
         /// Default to the COMP/USD feed
         rewardTokenPriceFeed = 0x2A8758b7257102461BC958279054e372C2b1bDE6;
+
+        // Default buffer t0 1%
+        buffer = 100;
     }
 
     /**
@@ -167,6 +174,11 @@ contract Depositor {
         comet.getPrice(_rewardTokenPriceFeed);
         baseTokenPriceFeed = _baseTokenPriceFeed;
         rewardTokenPriceFeed = _rewardTokenPriceFeed;
+    }
+
+    function setBuffer(uint256 _buffer) external onlyManagement {
+        require(_buffer <= MAX_BPS, "higher than MAX_BPS");
+        buffer = _buffer;
     }
 
     /**
@@ -223,9 +235,9 @@ contract Depositor {
         }
     }
 
-    /// ----------------- COMET VIEW FUNCTIONS -----------------
+    /// ----------------- COMET VIEW FUNCTIONS ----------------- \\\
 
-    /// We put these in the depositor contract to save byte code in the main strategy \\
+    // We put these in the depositor contract to save byte code in the main strategy
 
     /**
      * @notice Calculates accrued reward tokens due to this contract and the base strategy
@@ -317,7 +329,7 @@ contract Depositor {
                 SCALER;
             if (rewardToSuppliersPerDay == 0) return 0;
             return
-                ((_comet.getPrice(rewardTokenPriceFeed) *
+                ((_pessimisticPrice(_comet.getPrice(rewardTokenPriceFeed)) *
                     rewardToSuppliersPerDay) /
                     ((_comet.totalSupply() + newAmount) *
                         _comet.getPrice(baseTokenPriceFeed))) * DAYS_PER_YEAR;
@@ -340,11 +352,17 @@ contract Depositor {
                 SCALER;
             if (rewardToBorrowersPerDay == 0) return 0;
             return
-                ((_comet.getPrice(rewardTokenPriceFeed) *
+                ((_pessimisticPrice(_comet.getPrice(rewardTokenPriceFeed)) *
                     rewardToBorrowersPerDay) /
                     ((_comet.totalBorrow() + newAmount) *
                         _comet.getPrice(baseTokenPriceFeed))) * DAYS_PER_YEAR;
         }
+    }
+
+    function _pessimisticPrice(
+        uint256 _oraclePrice
+    ) internal view returns (uint256) {
+        return (_oraclePrice * (MAX_BPS - buffer)) / MAX_BPS;
     }
 
     /**
