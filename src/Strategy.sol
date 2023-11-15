@@ -48,6 +48,9 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
     /// Mapping from token => struct containing its reused info
     mapping(address => TokenInfo) public tokenInfo;
 
+    /// @notice Deposit limit for the strategy.
+    uint256 public depositLimit;
+
     /// @notice Target Loan-To-Value (LTV) multiplier.
     /// @dev Represents the ratio up to which we will borrow, relative to the liquidation threshold.
     /// LTV is the debt-to-collateral ratio. Default is set to 80% of the liquidation LTV.
@@ -110,6 +113,9 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
         /// Set the min amount for the swapper to sell
         minAmountToSell = 1e10;
 
+        // Default deposit limit to max uint.
+        depositLimit = type(uint256).max;
+
         /// Default to .3% pool for comp/eth and to .05% pool for eth/baseToken
         _setFees(3000, 500, _ethToAssetFee);
 
@@ -144,6 +150,7 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
      * @param _maxGasPriceToTend Maximum gas price for the tend operation
      */
     function setStrategyParams(
+        uint256 _depositLimit,
         uint16 _targetLTVMultiplier,
         uint16 _warningLTVMultiplier,
         uint256 _minToSell,
@@ -156,6 +163,7 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
                 _targetLTVMultiplier < _warningLTVMultiplier &&
                 _targetLTVMultiplier != 0
         );
+        depositLimit = _depositLimit;
         targetLTVMultiplier = _targetLTVMultiplier;
         warningLTVMultiplier = _warningLTVMultiplier;
         minAmountToSell = _minToSell;
@@ -444,11 +452,18 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
         /// We need to be able to both supply and withdraw on deposits.
         if (comet.isSupplyPaused() || comet.isWithdrawPaused()) return 0;
 
-        return
-            uint256(
-                comet.getAssetInfoByAddress(address(asset)).supplyCap -
-                    comet.totalsCollateral(address(asset)).totalSupplyAsset
-            );
+        uint256 currentAssets = TokenizedStrategy.totalAssets();
+        uint256 limit = depositLimit > currentAssets
+            ? depositLimit - currentAssets
+            : 0;
+
+        uint256 supplyCap = uint256(
+            comet.getAssetInfoByAddress(address(asset)).supplyCap -
+                comet.totalsCollateral(address(asset)).totalSupplyAsset
+        );
+
+        // Return whatever one is lower.
+        return limit > supplyCap ? supplyCap : limit;
     }
 
     /**
