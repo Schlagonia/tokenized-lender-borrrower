@@ -17,6 +17,9 @@ contract TokenizedCompV3LenderBorrowerFactory {
     /// @notice Address of the original depositor contract used for cloning
     address public immutable originalDepositor;
 
+    /// @notice Mapping of an asset => its deployed strategy if exists
+    mapping (address => address) public deployedStrategy;
+
     /**
      * @notice Emitted when a new depositor and strategy are deployed
      * @param depositor Address of the deployed depositor contract
@@ -56,6 +59,8 @@ contract TokenizedCompV3LenderBorrowerFactory {
         address _comet,
         uint24 _ethToAssetFee
     ) external returns (address, address) {
+        require(deployedStrategy[_asset] == address(0), "already deployed");
+
         address depositor = Depositor(originalDepositor).cloneDepositor(_comet);
 
         /// Need to give the address the correct interface.
@@ -78,6 +83,9 @@ contract TokenizedCompV3LenderBorrowerFactory {
         strategy.setPerformanceFeeRecipient(rewards);
         strategy.setKeeper(keeper);
         strategy.setPendingManagement(management);
+
+        // Add to the mapping.
+        deployedStrategy[_asset] = address(strategy);
 
         emit Deployed(depositor, address(strategy));
         return (depositor, address(strategy));
