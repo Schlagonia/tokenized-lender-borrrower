@@ -20,9 +20,6 @@ contract TokenizedCompV3LenderBorrowerFactory {
     /// @notice Mapping of an asset => comet => its deployed strategy if exists
     mapping(address => mapping(address => address)) public deployedStrategy;
 
-    /// @notice Mapping of asset => array including all deployed strategies for that asset.
-    mapping(address => address[]) internal _deployedStrategies;
-
     /**
      * @notice Emitted when a new depositor and strategy are deployed
      * @param depositor Address of the deployed depositor contract
@@ -57,6 +54,7 @@ contract TokenizedCompV3LenderBorrowerFactory {
      */
     function newCompV3LenderBorrower(
         address _asset,
+        string memory _name,
         address _comet,
         uint24 _ethToAssetFee
     ) external returns (address, address) {
@@ -66,16 +64,6 @@ contract TokenizedCompV3LenderBorrowerFactory {
         );
 
         address depositor = Depositor(originalDepositor).cloneDepositor(_comet);
-
-        string memory _name = string(
-            abi.encodePacked(
-                "CompV3 ",
-                ERC20(_asset).symbol(),
-                " Lender ",
-                Depositor(depositor).baseToken().symbol(),
-                " Borrower"
-            )
-        );
 
         /// Need to give the address the correct interface.
         IStrategyInterface strategy = IStrategyInterface(
@@ -100,17 +88,9 @@ contract TokenizedCompV3LenderBorrowerFactory {
 
         // Add to the mapping.
         deployedStrategy[_asset][_comet] = address(strategy);
-        // Add to the deployed strategies array.
-        _deployedStrategies[_asset].push(address(strategy));
 
         emit Deployed(depositor, address(strategy));
         return (depositor, address(strategy));
-    }
-
-    function deployedStrategies(
-        address _asset
-    ) external view returns (address[] memory) {
-        return _deployedStrategies[_asset];
     }
 
     function setAddresses(
