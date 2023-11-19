@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity 0.8.18;
 
-import "./Depositor.sol";
-import "./Strategy.sol";
+import {Depositor} from "./Depositor.sol";
+import {Strategy, ERC20} from "./Strategy.sol";
 
 import {IStrategyInterface} from "./interfaces/IStrategyInterface.sol";
 
@@ -17,8 +17,11 @@ contract TokenizedCompV3LenderBorrowerFactory {
     /// @notice Address of the original depositor contract used for cloning
     address public immutable originalDepositor;
 
-    /// @notice Mapping of an asset => its deployed strategy if exists
-    mapping (address => address) public deployedStrategy;
+    /// @notice Mapping of an asset => comet => its deployed strategy if exists
+    mapping(address => mapping(address => address)) public deployedStrategy;
+
+    /// @notice Mapping of asset => array including all deployed strategies for that asset.
+    mapping(address => address[]) internal _deployedStrategies;
 
     /**
      * @notice Emitted when a new depositor and strategy are deployed
@@ -41,13 +44,12 @@ contract TokenizedCompV3LenderBorrowerFactory {
     }
 
     function name() external pure returns (string memory) {
-        return "TokenizedCompV3LenderBorrowerFactory";
+        return "Tokenized CompV3 Lender Borrower Factory";
     }
 
     /**
      * @notice Deploys a new tokenized Compound v3 lender/borrower pair
      * @param _asset Underlying asset address
-     * @param _name Name for strategy
      * @param _comet Comet observatory address
      * @param _ethToAssetFee Conversion fee for ETH to asset
      * @return depositor Address of the deployed depositor
@@ -55,13 +57,25 @@ contract TokenizedCompV3LenderBorrowerFactory {
      */
     function newCompV3LenderBorrower(
         address _asset,
-        string memory _name,
         address _comet,
         uint24 _ethToAssetFee
     ) external returns (address, address) {
-        require(deployedStrategy[_asset] == address(0), "already deployed");
+        require(
+            deployedStrategy[_asset][_comet] == address(0),
+            "already deployed"
+        );
 
         address depositor = Depositor(originalDepositor).cloneDepositor(_comet);
+
+        string memory _name = string(
+            abi.encodePacked(
+                "CompV3 ",
+                ERC20(_asset).symbol(),
+                " Lender ",
+                Depositor(depositor).baseToken().symbol(),
+                " Borrower"
+            )
+        );
 
         /// Need to give the address the correct interface.
         IStrategyInterface strategy = IStrategyInterface(
@@ -85,10 +99,18 @@ contract TokenizedCompV3LenderBorrowerFactory {
         strategy.setPendingManagement(management);
 
         // Add to the mapping.
-        deployedStrategy[_asset] = address(strategy);
+        deployedStrategy[_asset][_comet] = address(strategy);
+        // Add to the deployed strategies array.
+        _deployedStrategies[_asset].push(address(strategy));
 
         emit Deployed(depositor, address(strategy));
         return (depositor, address(strategy));
+    }
+
+    function deployedStrategies(
+        address _asset
+    ) external view returns (address[] memory) {
+        return _deployedStrategies[_asset];
     }
 
     function setAddresses(

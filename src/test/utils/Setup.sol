@@ -95,12 +95,7 @@ contract Setup is ExtendedTest, IEvents {
 
     function setUpStrategy() public returns (Depositor, IStrategyInterface) {
         (address _depositor, address strategy_) = strategyFactory
-            .newCompV3LenderBorrower(
-                address(asset),
-                "Test Lender Borrower",
-                comet,
-                ethToAssetFee
-            );
+            .newCompV3LenderBorrower(address(asset), comet, ethToAssetFee);
         // we save the strategy as a IStrategyInterface to give it the needed interface
         IStrategyInterface _strategy = IStrategyInterface(strategy_);
 
