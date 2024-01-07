@@ -1,10 +1,10 @@
 pragma solidity ^0.8.18;
 
 import "forge-std/console.sol";
-import {Setup, ERC20} from "./utils/Setup.sol";
+import {Setup, ERC20, Comet} from "./utils/Setup.sol";
 
 contract ShutdownTest is Setup {
-    function setUp() public override {
+    function setUp() public virtual override {
         super.setUp();
     }
 
@@ -59,8 +59,8 @@ contract ShutdownTest is Setup {
         vm.prank(management);
         strategy.emergencyWithdraw(type(uint256).max);
 
-        assertEq(ERC20(strategy.baseToken()).balanceOf(address(strategy)), 0);
-        assertEq(ERC20(strategy.baseToken()).balanceOf(address(depositor)), 0);
+        assertEq(ERC20(baseToken).balanceOf(address(strategy)), 0);
+        assertEq(ERC20(baseToken).balanceOf(address(depositor)), 0);
         assertEq(depositor.cometBalance(), 0);
         assertGt(strategy.totalIdle(), 0);
         assertLt(strategy.totalDebt(), _amount);
@@ -95,8 +95,8 @@ contract ShutdownTest is Setup {
 
         uint256 ltv = strategy.getCurrentLTV();
 
-        assertEq(ERC20(strategy.baseToken()).balanceOf(address(depositor)), 0);
-        assertEq(ERC20(strategy.baseToken()).balanceOf(address(strategy)), 0);
+        assertEq(ERC20(baseToken).balanceOf(address(depositor)), 0);
+        assertEq(ERC20(baseToken).balanceOf(address(strategy)), 0);
 
         uint256 balance = depositor.cometBalance();
 
@@ -173,8 +173,8 @@ contract ShutdownTest is Setup {
 
         uint256 ltv = strategy.getCurrentLTV();
 
-        assertEq(ERC20(strategy.baseToken()).balanceOf(address(depositor)), 0);
-        assertEq(ERC20(strategy.baseToken()).balanceOf(address(strategy)), 0);
+        assertEq(ERC20(baseToken).balanceOf(address(depositor)), 0);
+        assertEq(ERC20(baseToken).balanceOf(address(strategy)), 0);
         assertRelApproxEq(strategy.getCurrentLTV(), ltv, 10);
 
         uint256 balance = depositor.cometBalance();
@@ -186,12 +186,9 @@ contract ShutdownTest is Setup {
         vm.prank(management);
         depositor.manualWithdraw(balance);
 
-        assertEq(ERC20(strategy.baseToken()).balanceOf(address(depositor)), 0);
+        assertEq(ERC20(baseToken).balanceOf(address(depositor)), 0);
         assertEq(depositor.cometBalance(), 0);
-        assertEq(
-            ERC20(strategy.baseToken()).balanceOf(address(strategy)),
-            balance
-        );
+        assertEq(ERC20(baseToken).balanceOf(address(strategy)), balance);
         assertRelApproxEq(strategy.getCurrentLTV(), ltv, 10);
 
         vm.expectRevert("!emergency authorized");
@@ -208,9 +205,9 @@ contract ShutdownTest is Setup {
         vm.prank(management);
         strategy.manualRepayDebt();
 
-        assertEq(ERC20(strategy.baseToken()).balanceOf(address(depositor)), 0);
+        assertEq(ERC20(baseToken).balanceOf(address(depositor)), 0);
         assertEq(depositor.cometBalance(), 0);
-        assertEq(ERC20(strategy.baseToken()).balanceOf(address(strategy)), 0);
+        assertEq(ERC20(baseToken).balanceOf(address(strategy)), 0);
         assertEq(strategy.getCurrentLTV(), 0);
 
         checkStrategyTotals(strategy, _amount, _amount, 0);
@@ -244,4 +241,103 @@ contract ShutdownTest is Setup {
             "!final balance"
         );
     }
+
+    function test_liquidation(uint256 _amount) public {
+        vm.assume(_amount > minFuzzAmount && _amount < maxFuzzAmount);
+
+        // Deposit into strategy
+        mintAndDepositIntoStrategy(strategy, user, _amount);
+
+        checkStrategyTotals(strategy, _amount, _amount, 0);
+
+        // Earn Interest
+        skip(1 days);
+
+        checkStrategyTotals(strategy, _amount, _amount, 0);
+
+        uint256 ltv = strategy.getCurrentLTV();
+
+        assertEq(ERC20(baseToken).balanceOf(address(depositor)), 0);
+        assertEq(ERC20(baseToken).balanceOf(address(strategy)), 0);
+        assertRelApproxEq(strategy.getCurrentLTV(), ltv, 10);
+
+        uint256 balance = depositor.cometBalance();
+        uint256 debt = strategy.balanceOfDebt();
+
+        // Simulate liquidation.
+        //Airdrop full debt + 10% to the strategy
+        airdrop(ERC20(baseToken), address(strategy), (debt * 11_000) / MAX_BPS);
+        // Repay debt to free up collateral
+        vm.startPrank(address(strategy));
+        Comet(comet).supply(baseToken, debt);
+        // Remove collateral
+        Comet(comet).withdraw(address(asset), _amount);
+        // Send out of strategy.
+        asset.transfer(management, _amount);
+        // Supply the rest of the baseToken into comet.
+        uint256 loose = ERC20(baseToken).balanceOf(address(strategy));
+        Comet(comet).supply(baseToken, loose);
+        vm.stopPrank();
+
+        // Make sure simulation worked
+        assertEq(ERC20(baseToken).balanceOf(address(depositor)), 0);
+        assertEq(ERC20(baseToken).balanceOf(address(strategy)), 0);
+        assertEq(strategy.getCurrentLTV(), 0);
+        assertEq(strategy.balanceOfCollateral(), 0);
+        assertEq(strategy.balanceOfDebt(), 0);
+        assertGt(Comet(comet).balanceOf(address(strategy)), 0);
+        assertEq(strategy.balanceOfAsset(), 0);
+
+        vm.expectRevert("healthCheck");
+        vm.prank(keeper);
+        strategy.report();
+
+        // Trigger should be false.
+        (bool trigger, ) = strategy.tendTrigger();
+        assertTrue(!trigger);
+
+        // Move all the USDC to the strategy and swap -> asset
+        vm.prank(management);
+        depositor.manualWithdraw(type(uint256).max);
+
+        uint256 strategyBalance = Comet(comet).balanceOf(address(strategy));
+        vm.prank(management);
+        strategy.manualWithdraw(baseToken, strategyBalance);
+
+        // Lower min to sell
+        vm.startPrank(management);
+        strategy.setStrategyParams(
+            strategy.depositLimit(),
+            strategy.targetLTVMultiplier(),
+            strategy.warningLTVMultiplier(),
+            0,
+            strategy.slippage(),
+            strategy.leaveDebtBehind(),
+            strategy.maxGasPriceToTend()
+        );
+        vm.stopPrank();
+
+        vm.prank(management);
+        strategy.sellBaseToken(type(uint256).max);
+
+        // Everything should be in asset
+        assertEq(strategy.balanceOfCollateral(), 0);
+        assertEq(strategy.balanceOfBaseToken(), 0);
+        assertEq(strategy.balanceOfDebt(), 0);
+        assertEq(strategy.balanceOfDepositor(), 0);
+        assertEq(ERC20(baseToken).balanceOf(address(depositor)), 0);
+        assertGt(asset.balanceOf(address(strategy)), 0);
+
+        // will still report a loss but not 100%
+        vm.prank(management);
+        strategy.setLossLimitRatio(5_000);
+
+        vm.prank(keeper);
+        strategy.report();
+
+        vm.prank(user);
+        strategy.redeem(_amount, user, user, 1);
+    }
+
+    function test_sweep() public {}
 }

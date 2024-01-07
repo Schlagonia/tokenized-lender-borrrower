@@ -917,10 +917,14 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
      * @return Current LTV in 1e18 format
      */
     function getCurrentLTV() external view returns (uint256) {
+        uint256 collateral = balanceOfCollateral();
+
+        if (collateral == 0) return 0;
+
         unchecked {
             return
                 (_toUsd(balanceOfDebt(), baseToken) * 1e18) /
-                _toUsd(balanceOfCollateral(), address(asset));
+                _toUsd(collateral, address(asset));
         }
     }
 
