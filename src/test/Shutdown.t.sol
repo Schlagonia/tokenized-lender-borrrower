@@ -260,8 +260,6 @@ contract ShutdownTest is Setup {
         assertEq(ERC20(baseToken).balanceOf(address(depositor)), 0);
         assertEq(ERC20(baseToken).balanceOf(address(strategy)), 0);
         assertRelApproxEq(strategy.getCurrentLTV(), ltv, 10);
-
-        uint256 balance = depositor.cometBalance();
         uint256 debt = strategy.balanceOfDebt();
 
         // Simulate liquidation.
@@ -339,5 +337,67 @@ contract ShutdownTest is Setup {
         strategy.redeem(_amount, user, user, 1);
     }
 
-    function test_sweep() public {}
+    function test_sweep(uint256 _amount) public {
+        address gov = 0xC4ad0000E223E398DC329235e6C497Db5470B626;
+        vm.assume(_amount > minFuzzAmount && _amount < maxFuzzAmount);
+
+        airdrop(asset, address(strategy), _amount);
+        // Airdrop extra base token to deposit
+        airdrop(ERC20(baseToken), address(strategy), _amount * 2);
+        // Deposit half into comet
+        vm.prank(address(strategy));
+        ERC20(baseToken).approve(comet, _amount);
+        vm.prank(address(strategy));
+        Comet(comet).supply(baseToken, _amount);
+
+        assertEq(asset.balanceOf(address(strategy)), _amount, "asset");
+        assertEq(
+            ERC20(baseToken).balanceOf(address(strategy)),
+            _amount,
+            "base"
+        );
+        // Rounding diffs
+        assertRelApproxEq(
+            ERC20(comet).balanceOf(address(strategy)),
+            _amount,
+            1
+        );
+
+        vm.expectRevert();
+        vm.prank(user);
+        strategy.sweep(baseToken);
+
+        vm.expectRevert();
+        vm.prank(management);
+        strategy.sweep(baseToken);
+
+        // Sweep Base token
+        uint256 beforeBalance = ERC20(baseToken).balanceOf(gov);
+
+        vm.prank(gov);
+        strategy.sweep(baseToken);
+
+        assertEq(
+            ERC20(baseToken).balanceOf(gov),
+            beforeBalance + _amount,
+            "base swept"
+        );
+
+        // Sweep c token
+        beforeBalance = ERC20(comet).balanceOf(gov);
+
+        vm.prank(gov);
+        strategy.sweep(comet);
+
+        assertRelApproxEq(
+            ERC20(comet).balanceOf(gov),
+            beforeBalance + _amount,
+            1
+        );
+
+        // Cant sweep asset
+        vm.expectRevert("!asset");
+        vm.prank(gov);
+        strategy.sweep(address(asset));
+    }
 }
