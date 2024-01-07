@@ -480,6 +480,35 @@ contract OperationTest is Setup {
         (trigger, ) = strategy.tendTrigger();
         assertTrue(trigger, "warning ltv");
 
+        // Even with a 0 for max Tend Base Fee its true
+        vm.startPrank(management);
+        strategy.setStrategyParams(
+            strategy.depositLimit(),
+            strategy.targetLTVMultiplier(),
+            strategy.warningLTVMultiplier(),
+            strategy.minAmountToSell(),
+            strategy.slippage(),
+            strategy.leaveDebtBehind(),
+            0
+        );
+        vm.stopPrank();
+
+        (trigger, ) = strategy.tendTrigger();
+        assertTrue(trigger, "warning ltv 2");
+
+        // Even with a 0 for max Tend Base Fee its true
+        vm.startPrank(management);
+        strategy.setStrategyParams(
+            strategy.depositLimit(),
+            strategy.targetLTVMultiplier(),
+            strategy.warningLTVMultiplier(),
+            strategy.minAmountToSell(),
+            strategy.slippage(),
+            strategy.leaveDebtBehind(),
+            200e9
+        );
+        vm.stopPrank();
+
         vm.prank(keeper);
         strategy.tend();
 

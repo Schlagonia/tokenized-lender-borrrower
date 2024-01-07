@@ -10,6 +10,8 @@ interface IStrategyInterface is IBaseHealthCheck, IUniswapV3Swapper {
         uint96 decimals;
     }
 
+    function setPriceFeed(address _token, address _priceFeed) external;
+
     function tokenInfo(address) external view returns (TokenInfo memory);
 
     function baseToken() external view returns (address);
@@ -70,5 +72,9 @@ interface IStrategyInterface is IBaseHealthCheck, IUniswapV3Swapper {
 
     function manualRepayDebt() external;
 
-    function manualWithdraw() external;
+    function manualWithdraw(address _token, uint256 _amount) external;
+
+    function sellBaseToken(uint256 _amount) external;
+
+    function sweep(address _token) external;
 }
