@@ -185,7 +185,7 @@ contract Depositor {
      * @notice Returns the Compound market balance for this depositor
      * @return The Compound market balance
      */
-    function cometBalance() external view returns (uint256) {
+    function cometBalance() public view returns (uint256) {
         return comet.balanceOf(address(this));
     }
 
@@ -373,6 +373,9 @@ contract Depositor {
         require(strategy.isEmergencyAuthorized(msg.sender));
 
         if (_amount != 0) {
+            if (_amount == type(uint256).max) {
+                _amount = cometBalance();
+            }
             /// Withdraw directly from the comet.
             comet.withdraw(address(baseToken), _amount);
         }

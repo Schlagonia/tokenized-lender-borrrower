@@ -385,8 +385,7 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
 
         /// Check if we are over our warning LTV
         if (currentLTV > _getWarningLTV()) {
-            // Make sure the gas price isn't to high.
-            return _isBaseFeeAcceptable();
+            return true;
         }
 
         uint256 targetLTV = _getTargetLTV();
@@ -918,10 +917,14 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
      * @return Current LTV in 1e18 format
      */
     function getCurrentLTV() external view returns (uint256) {
+        uint256 collateral = balanceOfCollateral();
+
+        if (collateral == 0) return 0;
+
         unchecked {
             return
                 (_toUsd(balanceOfDebt(), baseToken) * 1e18) /
-                _toUsd(balanceOfCollateral(), address(asset));
+                _toUsd(collateral, address(asset));
         }
     }
 
@@ -1031,6 +1034,18 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
     }
 
     /**
+     * @dev Will swap from the base token => underlying asset.
+     */
+    function _sellBaseToken(uint256 _amount) internal {
+        _swapFrom(
+            baseToken,
+            address(asset),
+            _amount,
+            _getAmountOut(_amount, baseToken, address(asset))
+        );
+    }
+
+    /**
      * @notice Estimates swap output accounting for slippage
      * @param _amount Input amount
      * @param _from Input token
@@ -1094,13 +1109,44 @@ contract Strategy is BaseHealthCheck, UniswapV3Swapper {
         _claimAndSellRewards(true);
     }
 
-    function manualWithdraw() external onlyEmergencyAuthorized {
-        // Withdraw all that makes sense.
-        _withdraw(address(asset), _maxWithdrawal());
+    /// @notice Sell a specific amount of `baseToken` -> asset.
+    ///     The amount of baseToken should be loose in the strategy before this is called
+    ///     max uint input will sell any excess baseToken we have.
+    function sellBaseToken(uint256 _amount) external onlyEmergencyAuthorized {
+        if (_amount == type(uint256).max) {
+            uint256 _balanceOfBaseToken = balanceOfBaseToken();
+            _amount = Math.min(
+                balanceOfDepositor() + _balanceOfBaseToken - balanceOfDebt(),
+                _balanceOfBaseToken
+            );
+        }
+        _sellBaseToken(_amount);
+    }
+
+    /// @notice Withdraw a specific amount of `_token`
+    function manualWithdraw(
+        address _token,
+        uint256 _amount
+    ) external onlyEmergencyAuthorized {
+        _withdraw(_token, _amount);
     }
 
     // Manually repay debt with loose baseToken already in the strategy.
     function manualRepayDebt() external onlyEmergencyAuthorized {
         _repayTokenDebt();
+    }
+
+    /// @notice Sweep of non-asset ERC20 tokens to governance
+    /// @param _token The ERC20 token to sweep
+    function sweep(address _token) external {
+        require(
+            msg.sender == 0xC4ad0000E223E398DC329235e6C497Db5470B626,
+            "!gov"
+        );
+        require(_token != address(asset), "!asset");
+        ERC20(_token).safeTransfer(
+            0xC4ad0000E223E398DC329235e6C497Db5470B626,
+            ERC20(_token).balanceOf(address(this))
+        );
     }
 }
